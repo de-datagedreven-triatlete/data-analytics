@@ -1,4 +1,4 @@
-# 🏊‍♀️🚴🏃 Triathlon & Duathlon Data Analytics
+# 🏊‍♀️🚴🏃 Triathlon Data Analytics
 
 Data-gedreven analyses van multi-sport trainingen en raceresultaten op basis van ruwe `.fit`-bestanden.
 
