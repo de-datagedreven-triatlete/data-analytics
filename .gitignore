@@ -6,8 +6,8 @@ __pycache__/
 .ipynb_checkpoints/
 .databricks/
 
-# Optioneel: verberg ruwe .fit bestanden als deze persoonlijke GPS-data bevatten
-# fit_bestanden/*.fit
+# Verberg ruwe .fit bestanden
+*.fit
 
 # Besturingssysteem bestanden
 .DS_Store
