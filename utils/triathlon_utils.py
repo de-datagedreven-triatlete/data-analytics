@@ -6,11 +6,11 @@ import numpy as np
 import fitparse
 
 KLEUREN_PALETTE = {
-    'background': '#0E1117',
+    'background': '#000000',
     'card_bg': '#1E222D',
     'hr': '#FF2A6D',          # Neon Coral
     'speed': '#00F5FF',       # Ice Cyan
-    'bike': '#00FF66',        # Acid Green
+    'bike': '#FFD700',        # Gold
     'muted': '#8A99AD',       # Slate Gray
     'grid': '#2A2A2A',
     'text': '#FFFFFF'
@@ -163,12 +163,20 @@ def plot_run_comparison(df_active, bike_start, bike_eind):
     return fig
 
 def export_for_instagram(fig, filename, format_type='portrait', output_dir='../output'):
-    """Slaat de grafiek op in het gewenste Instagram-formaat."""
+    """Slaat de grafiek op in het gewenste formaat."""
     os.makedirs(output_dir, exist_ok=True)
-    dimensions = {'portrait': (10.8, 13.5), 'square': (10.8, 10.8), 'story': (10.8, 19.2)}
-    width, height = dimensions.get(format_type, dimensions['portrait'])
-    fig.set_size_inches(width, height)
     
+    dimensions = {
+        'portrait': (10.8, 13.5),    # 4:5 (Instagram Post)
+        'square': (10.8, 10.8),      # 1:1 (Vierkant)
+        'story': (10.8, 19.2),       # 9:16 (Story/Reel)
+        'landscape': (13.5, 7.59),   # 16:9 (Liggend / Breedbeeld)
+    }
+    
+    if format_type in dimensions:
+        width, height = dimensions[format_type]
+        fig.set_size_inches(width, height)
+
     filepath = os.path.join(output_dir, f"{filename}.png")
     fig.savefig(filepath, dpi=300, bbox_inches='tight', pad_inches=0.4, facecolor=fig.get_facecolor(), edgecolor='none')
     print(f"Visualisatie opgeslagen: {filepath}")
