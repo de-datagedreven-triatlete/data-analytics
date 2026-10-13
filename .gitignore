@@ -1,14 +1,21 @@
-# Byte-compiled / Python cache
-__pycache__/
-*.py[cod]
-
-# Databricks & Jupyter checkpoints
-.ipynb_checkpoints/
-.databricks/
-
-# Verberg ruwe .fit bestanden
+# Persoonlijke en gevoelige data: FIT-bestanden bevatten GPS-posities (o.a. start- en eindlocatie)
+fit_bestanden/*.fit
+fit_bestanden/*.FIT
 *.fit
 
-# Besturingssysteem bestanden
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+*.egg-info/
+
+# Omgevingen
+.venv/
+venv/
+.env
+
+# Besturingssysteem en editors
 .DS_Store
-Thumbs.db
+.idea/
+.vscode/
