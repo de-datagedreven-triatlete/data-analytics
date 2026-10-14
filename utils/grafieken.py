@@ -564,4 +564,91 @@ def teken_segment_profiel(
     fig.tight_layout()
     return fig
 
+def teken_daal_profiel(df_dalen: pd.DataFrame, statistieken: dict, etappe_nr: int | None = None):
+    """
+    Tekent een 2-paneel grafiek met Daalsnelheid, Cadans, Hartslag en gearceerde aandachtsgebieden.
+    Exact gelijke verhoudingen en stijl als teken_hoogtefactor.
+    """
+    pas_stijl_toe()
+    fig, (ax_boven, ax_onder) = plt.subplots(2, 1, figsize=(12, 7.5), sharex=True, 
+                                             gridspec_kw={"height_ratios": [2, 1]}, dpi=300)
+    
+    x = df_dalen['elapsed_min'].to_numpy()
+    
+    # --- BOVENSTE PANEEL: Snelheid (VDM) en Hoogte ---
+    if df_dalen['hoogte'].notna().any():
+        teken_hoogteprofiel(ax_boven, df_dalen['elapsed_min'], df_dalen['hoogte'], toon_as=True, ruimte_boven=0.15)
+        
+    vdm_array = df_dalen['vdm_rolling'].to_numpy().copy()
+    vdm_array[np.r_[False, np.diff(x) > 10.0]] = np.nan 
+    
+    ax_boven.plot(x, vdm_array, color=KLEUREN["snelheid"], linewidth=2.5, label='VDM', zorder=4)
+    ax_boven.set_ylabel('Verticale Daalsnelheid (m/u)', color=KLEUREN["snelheid"], fontweight='bold', fontsize=10, labelpad=8)
+    ax_boven.tick_params(axis='y', labelcolor=KLEUREN["snelheid"])
+    ax_boven.set_ylim(bottom=0)
+    
+    # --- ONDERSTE PANEEL: Cadans en Hartslag ---
+    if 'cadans_glad' in df_dalen.columns:
+        cadans_array = df_dalen['cadans_glad'].to_numpy().copy()
+        cadans_array[np.r_[False, np.diff(x) > 10.0]] = np.nan
+        
+        ax_onder.plot(x, cadans_array, color=KLEUREN["cadans"], linewidth=2.0, label='Cadans', zorder=4)
+        ax_onder.set_ylabel('Cadans (spm)', color=KLEUREN["cadans"], fontweight='bold', fontsize=10, labelpad=8)
+        ax_onder.tick_params(axis='y', labelcolor=KLEUREN["cadans"])
+        
+    if 'hartslag_glad' in df_dalen.columns:
+        ax_hartslag = ax_onder.twinx()
+        hr_array = df_dalen['hartslag_glad'].to_numpy().copy()
+        hr_array[np.r_[False, np.diff(x) > 10.0]] = np.nan
+        
+        ax_hartslag.plot(x, hr_array, color=KLEUREN["hartslag"], linewidth=2.0, label='Hartslag', zorder=4)
+        ax_hartslag.set_ylabel('Hartslag (bpm)', color=KLEUREN["hartslag"], fontweight='bold', fontsize=10, labelpad=8)
+        ax_hartslag.tick_params(axis='y', labelcolor=KLEUREN["hartslag"])
 
+    lijnen_onder, labels_onder = ax_onder.get_legend_handles_labels()
+    if 'hartslag_glad' in df_dalen.columns:
+        lijnen_hr, labels_hr = ax_hartslag.get_legend_handles_labels()
+        lijnen_onder.extend(lijnen_hr)
+        labels_onder.extend(labels_hr)
+        
+    if lijnen_onder: 
+        ax_onder.legend(lijnen_onder, labels_onder, loc="lower left", bbox_to_anchor=(0.02, 0.05), **_LEGENDA)
+
+    # --- HIGHLIGHTS ---
+    start1, eind1 = 20, 40
+    start2, eind2 = 130, 150
+
+    y_tekst = ax_boven.get_ylim()[1] * 0.05
+    
+    ax_boven.axvspan(start1, eind1, color=KLEUREN["goed"], alpha=0.15, zorder=1)
+    ax_boven.text((start1+eind1)/2, y_tekst, "Fase 1: Start afdaling\n(Hoge efficiëntie)", 
+                  color=KLEUREN["goed"], ha='center', va='bottom', fontweight='bold', fontsize=9.5)
+                  
+    ax_boven.axvspan(start2, eind2, color=KLEUREN["hartslag"], alpha=0.15, zorder=1)
+    ax_boven.text((start2+eind2)/2, y_tekst, "Fase 2: Na 2 uur dalen\n(Spiervermoeidheid)", 
+                  color=KLEUREN["hartslag"], ha='center', va='bottom', fontweight='bold', fontsize=9.5)
+                  
+    ax_onder.axvspan(start1, eind1, color=KLEUREN["goed"], alpha=0.15, zorder=1)
+    ax_onder.axvspan(start2, eind2, color=KLEUREN["hartslag"], alpha=0.15, zorder=1)
+
+    # --- STATISTIEKEN & OPMAAK ---
+    ax_onder.set_xlabel('Tijd in afdaling (minuten)', fontweight='bold', color=KLEUREN["tekst"], fontsize=10, labelpad=8)
+    ax_boven.grid(False)
+    ax_onder.grid(False)
+    
+    regels = [
+        f"Gem. gehele afdaling: {statistieken['gem_vdm']:.0f} m/u",
+        f"Daalsnelheid Fase 1: {statistieken['vdm_start']:.0f} m/u",
+        f"Daalsnelheid Fase 2: {statistieken['vdm_einde']:.0f} m/u",
+        "---------------------------",
+        f"Verval in snelheid:  -{abs(statistieken['decay_percentage']):.1f}%"
+    ]
+    
+    voeg_statistiekenblok_toe(ax_boven, regels, x=0.40, y=0.15, vaste_breedte=True, fontsize=9)
+    
+    ax_boven.set_title(maak_titel("Final Descent Decay: Spierschade vs. Wandelmechanica", etappe_nr), 
+                       fontsize=12, fontweight="bold", pad=15, color=KLEUREN["tekst"])
+    ax_boven.legend(loc="lower left", bbox_to_anchor=(0.02, 0.05), **_LEGENDA)
+    
+    fig.tight_layout()
+    return fig

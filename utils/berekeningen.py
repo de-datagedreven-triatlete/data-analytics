@@ -732,3 +732,67 @@ def bereken_steilste_segment(
     }
 
     return df_klim, df_rest, beste_segment, statistieken
+
+def bereken_daal_vermoeidheid(df, window_minuten=10, max_minuten=160):
+    """
+    Berekent VDM, hellingspercentage, hartslag en cadans voor de afdaling.
+    Filtert de eerste 3 minuten (GPS-ruis) en stopt bij max_minuten.
+    """
+    if 'hoogte' not in df.columns or 'tijd' not in df.columns:
+        raise KeyError("Geen kolom 'hoogte' of 'tijd' gevonden in de data.")
+
+    # Verschillen berekenen
+    if 'hoogte_diff' not in df.columns:
+        df['hoogte_diff'] = df['hoogte'].diff()
+    if 'time_diff_sec' not in df.columns:
+        df['time_diff_sec'] = df['tijd'].diff().dt.total_seconds()
+    if 'afstand_m' in df.columns and 'afstand_diff' not in df.columns:
+        df['afstand_diff'] = df['afstand_m'].diff()
+        
+    # Relatieve tijd in minuten
+    if 'verstreken_minuten' in df.columns:
+        df['elapsed_min'] = df['verstreken_minuten']
+    else:
+        df['elapsed_min'] = (df['tijd'] - df['tijd'].iloc[0]).dt.total_seconds() / 60.0
+        
+    # Isoleer de afdaling (negeer eerste 3 minuten voor GPS ruis, stop in het dal)
+    df_dalen = df[(df['elapsed_min'] > 3.0) & (df['elapsed_min'] <= max_minuten) & 
+                  (df['hoogte_diff'] < 0) & (df['time_diff_sec'] > 0)].copy()
+    
+    window_size = window_minuten * 60 
+    
+    # 1. Daalsnelheid (VDM) berekenen
+    df_dalen['vdm_instant'] = (abs(df_dalen['hoogte_diff']) / df_dalen['time_diff_sec']) * 3600
+    df_dalen['vdm_rolling'] = df_dalen['vdm_instant'].rolling(window=window_size, min_periods=60).mean()
+    
+    # 2. Dalingspercentage (Helling) berekenen
+    if 'afstand_diff' in df_dalen.columns:
+        df_dalen['helling_pct'] = (abs(df_dalen['hoogte_diff']) / df_dalen['afstand_diff'].replace(0, np.nan)) * 100
+        df_dalen['helling_glad'] = df_dalen['helling_pct'].rolling(window=window_size, min_periods=60).mean()
+    else:
+        df_dalen['helling_glad'] = np.nan
+        
+    # 3. Hartslag en Cadans gladstrijken (TOEGEVOEGD!)
+    if 'hartslag' in df_dalen.columns:
+        df_dalen['hartslag_glad'] = df_dalen['hartslag'].rolling(window=60, min_periods=1).mean()
+    if 'cadans' in df_dalen.columns:
+        df_dalen['cadans_glad'] = df_dalen['cadans'].rolling(window=60, min_periods=1).mean()
+    
+    # Statistieken
+    n_points = len(df_dalen['vdm_rolling'].dropna())
+    if n_points > 100:
+        chunk = int(n_points * 0.2)
+        vdm_start = df_dalen['vdm_rolling'].dropna().iloc[:chunk].mean()
+        vdm_einde = df_dalen['vdm_rolling'].dropna().iloc[-chunk:].mean()
+        decay_perc = ((vdm_start - vdm_einde) / vdm_start) * 100 if vdm_start > 0 else 0
+    else:
+        vdm_start, vdm_einde, decay_perc = 0, 0, 0
+
+    statistieken = {
+        'max_vdm': df_dalen['vdm_rolling'].max() if not df_dalen['vdm_rolling'].empty else 0,
+        'vdm_start': vdm_start,
+        'vdm_einde': vdm_einde,
+        'decay_percentage': decay_perc,
+        'gem_vdm': df_dalen['vdm_rolling'].mean() if not df_dalen['vdm_rolling'].empty else 0
+    }
+    return df_dalen, statistieken

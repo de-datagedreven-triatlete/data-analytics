@@ -111,6 +111,7 @@ KLEUREN = {
     "kaart": "#1E222D",
     "hartslag": "#FF2A6D",       # Neon koraal
     "snelheid": "#00F5FF",       # IJscyaan
+    "cadans": "#F59E0B",        # Oranje
     "fiets": "#FFD700",          # Goud
     "gedempt": "#8A99AD",        # Leisteengrijs
     "hoogte": "#8A99AD",         # Hoogteprofiel op de achtergrond
