@@ -14,8 +14,8 @@ import numpy as np
 import pandas as pd
 from scipy.signal import savgol_filter
 
-from utils.config import ANALYSE
-from utils.inlezen import bereken_verstreken_tijd, lees_fit_bestand, schoon_fit_data
+from utils.config import ANALYSE, ATLEET
+from utils.inlezen import bereken_verstreken_tijd, lees_fit_bestand, schoon_fit_data, lees_herstelgegevens, lees_sessiegegevens, laad_master_dataset
 
 logger = logging.getLogger(__name__)
 
@@ -556,9 +556,9 @@ def bereken_klimcadans(df: pd.DataFrame, min_helling_pct: float = ANALYSE.baseli
 
 def bereken_klimcadans_per_bestand(
     fit_map: str | Path,
-    van_datum: str,
-    tot_datum: str,
-    naamfilter: str = "stubaier_hohenweg",
+    van_datum: str | None = None,
+    tot_datum: str | None = None,
+    naamfilter: str | None = None,
     cadans_factor: float = ANALYSE.wandel_cadans_factor,
     min_helling_pct: float = ANALYSE.baseline_klim_helling_pct,
 ) -> pd.DataFrame:
@@ -576,22 +576,27 @@ def bereken_klimcadans_per_bestand(
         Bestanden die niet te verwerken zijn, worden overgeslagen en gelogd.
     """
     resultaten = []
-    for pad in sorted(Path(fit_map).glob("*.fit")):
-        if naamfilter not in pad.name:
-            continue
+    fit_paden = sorted(Path(fit_map).glob("*.fit"))
+    
+    if naamfilter:
+        fit_paden = [p for p in fit_paden if naamfilter in p.name]
+
+    for pad in fit_paden:
         datum = pad.name.split("_")[0]
         try:
             df = schoon_fit_data(lees_fit_bestand(pad), cadans_factor=cadans_factor)
             klimcadans = bereken_klimcadans(df, min_helling_pct)
-        except Exception as fout:  # Eén kapot bestand mag de hele reeks niet stoppen
+        except Exception as fout:
             logger.warning("Overgeslagen: %s (%s)", pad.name, fout)
             continue
+            
+        in_baseline = (van_datum <= datum <= tot_datum) if (van_datum and tot_datum) else True
         resultaten.append(
             {
                 "bestand": pad.name,
                 "datum": datum,
                 "klimcadans_spm": klimcadans,
-                "in_baseline": van_datum <= datum <= tot_datum,
+                "in_baseline": in_baseline,
             }
         )
     return pd.DataFrame(resultaten, columns=["bestand", "datum", "klimcadans_spm", "in_baseline"])
@@ -796,3 +801,168 @@ def bereken_daal_vermoeidheid(df, window_minuten=10, max_minuten=160):
         'gem_vdm': df_dalen['vdm_rolling'].mean() if not df_dalen['vdm_rolling'].empty else 0
     }
     return df_dalen, statistieken
+
+def verzamel_master_statistieken(
+    fit_map: Path,
+    herstel_bestand: Path | None = None,
+    naamfilter: str | None = None
+) -> tuple[pd.DataFrame, dict]:
+    """
+    Generieke Master Compiler:
+    Aggregeert exacte Garmin-metrieken en fysiologische parameters (VAM, Efficiency Index,
+    Cardiac Drift, HRV, Readiness) over een willekeurige reeks FIT-bestanden.
+    """
+    from utils.inlezen import laad_master_dataset, lees_sessiegegevens, maak_tijdraster
+    
+    master_df = laad_master_dataset(fit_map=fit_map, herstel_bestand=herstel_bestand, naamfilter=naamfilter)
+    etappe_data = []
+
+    for etappe_nr, df_etappe in master_df.groupby("etappe_nr"):
+        bestandsnaam = df_etappe["bron_bestand"].iloc[0]
+        pad = fit_map / bestandsnaam
+        
+        # 1. Garmin sessiegegevens ophalen (voorkomt GPS-ruis afwijkingen)
+        sessie = lees_sessiegegevens(pad)
+        eigen_meters = bereken_hoogtemeters(df_etappe)
+        
+        stijging = sessie.get("total_ascent", eigen_meters["stijging_m"])
+        daling = sessie.get("total_descent", eigen_meters["daling_m"])
+        afstand_km = sessie.get("total_distance", df_etappe["afstand_m"].max()) / 1000.0 if "afstand_m" in df_etappe.columns else 0.0
+        
+        garmin_kcal = sessie.get("total_calories", np.nan)
+
+        if "total_timer_time" in sessie:
+            duur_min = sessie["total_timer_time"] / 60.0
+        else:
+            duur_min = df_etappe["verstreken_minuten"].iloc[-1] if "verstreken_minuten" in df_etappe.columns else 0.0
+
+        # 2. VAM & Fysiologische Efficiëntie
+        df_vam = bereken_vam(df_etappe)
+        gem_vam_klim = df_vam["vam_klim"].dropna().mean() if "vam_klim" in df_vam.columns else np.nan
+        klim_hr = df_vam.loc[df_vam["vam_klim"].notna(), "hartslag"].mean() if ("vam_klim" in df_vam.columns and "hartslag" in df_etappe.columns) else np.nan
+        
+        efficiency_index = gem_vam_klim / klim_hr if (pd.notna(klim_hr) and klim_hr > 0) else np.nan
+        klim_cadans = bereken_klimcadans(df_etappe, min_helling_pct=5.0) if "cadans" in df_etappe.columns else np.nan
+        
+        # 3. Cardiac Drift met fallback
+        drift_pct = np.nan
+        try:
+            raster = maak_tijdraster(df_etappe, max_gat_s=ANALYSE.max_gat_s)
+            _, drift_res = bereken_cardiac_drift(raster)
+            drift_pct = drift_res["drift_pct"]
+        except Exception:
+            pass
+            
+        if pd.isna(drift_pct) and "hartslag" in df_etappe.columns and df_etappe["hartslag"].notna().sum() > 20:
+            actief_df = df_etappe[df_etappe["snelheid_kmh"] > 0.5].dropna(subset=["hartslag", "snelheid_kmh"])
+            if len(actief_df) > 20:
+                midden = len(actief_df) // 2
+                hr_h1 = actief_df["hartslag"].iloc[:midden].mean()
+                hr_h2 = actief_df["hartslag"].iloc[midden:].mean()
+                spd_h1 = actief_df["snelheid_kmh"].iloc[:midden].mean()
+                spd_h2 = actief_df["snelheid_kmh"].iloc[midden:].mean()
+                
+                ef1 = hr_h1 / spd_h1 if spd_h1 > 0 else 0
+                ef2 = hr_h2 / spd_h2 if spd_h2 > 0 else 0
+                if ef1 > 0:
+                    drift_pct = ((ef2 - ef1) / ef1) * 100.0
+
+        etappe_data.append({
+            "etappe": etappe_nr,
+            "duur_min": duur_min,
+            "afstand_km": afstand_km,
+            "stijging_m": stijging,
+            "daling_m": daling,
+            "garmin_kcal": garmin_kcal,
+            "gem_hr": df_etappe["hartslag"].mean() if "hartslag" in df_etappe.columns else np.nan,
+            "klim_hr": klim_hr,
+            "gem_vam_klim": gem_vam_klim,
+            "efficiency_index": efficiency_index,
+            "klim_cadans": klim_cadans,
+            "cardiac_drift_pct": drift_pct,
+            "hrv_rmssd": df_etappe["hrv_rmssd"].iloc[0] if "hrv_rmssd" in df_etappe.columns else np.nan,
+            "readiness_score": df_etappe["readiness_score"].iloc[0] if "readiness_score" in df_etappe.columns else np.nan
+        })
+
+    df_master = pd.DataFrame(etappe_data).sort_values("etappe").reset_index(drop=True)
+    
+    totaal_stats = {
+        "totale_duur_uur": df_master["duur_min"].sum() / 60.0,
+        "totale_afstand_km": df_master["afstand_km"].sum(),
+        "totale_stijging_m": df_master["stijging_m"].sum(),
+        "totale_daling_m": df_master["daling_m"].sum(),
+        "gem_hr_tocht": df_master["gem_hr"].dropna().mean() if df_master["gem_hr"].notna().any() else np.nan,
+        "gem_efficiency_index": df_master["efficiency_index"].dropna().mean() if df_master["efficiency_index"].notna().any() else np.nan
+    }
+
+    return df_master, totaal_stats
+
+def bereken_energie_en_glycogeen(
+    df_master: pd.DataFrame, 
+    gewicht_kg: float = ATLEET.gewicht_kg,
+    leeftijd: int = ATLEET.leeftijd
+) -> pd.DataFrame:
+    """
+    Schat het totale calorieverbruik (kcal) en glycogeenverbruik (gram koolhydraten)
+    per etappe/activiteit op basis van duur, gemiddelde hartslag en lichaamsgewicht.
+    Args:
+        df_master: DataFrame met minstens 'duur_min' en 'gem_hr'.
+        gewicht_kg: Lichaamsgewicht van de atleet in kg. 
+    Returns:
+        DataFrame verrijkt met de kolommen 'energie_kcal', 'carbs_percentage' en 'glycogeen_verbruik_g'.
+    """
+    df = df_master.copy()
+    
+    # 1. Energieverbruik schatting (kcal)
+    if "garmin_kcal" in df.columns and df["garmin_kcal"].notna().any():
+        df["energie_kcal"] = df["garmin_kcal"]
+    else:
+        def keytel_kcal(row):
+            hr = row["gem_hr"]
+            duur = row["duur_min"]
+            if pd.isna(hr) or hr <= 0 or pd.isna(duur):
+                return 0.0
+            kcal_per_min = (-20.4022 + (0.4472 * hr) - (0.1263 * gewicht_kg) + (0.074 * leeftijd)) / 4.184
+            return max(0.0, kcal_per_min * duur)
+            
+        df["energie_kcal"] = df.apply(keytel_kcal, axis=1)
+    
+    # 2. Glycogeen aandeel (koolhydraatverbranding stijgt bij hogere hartslag)
+    df["carbs_percentage"] = df["gem_hr"].apply(
+        lambda hr: min(0.80, max(0.35, 0.35 + (hr - 100) * 0.008))
+        if pd.notna(hr) and hr > 0 else 0.45
+    )
+    
+    # 3. Glycogeenverbruik in grammen (1g carb = 4 kcal)
+    df["glycogeen_verbruik_g"] = (df["energie_kcal"] * df["carbs_percentage"]) / 4.0
+    
+    return df
+
+def bereken_hartslagzones_verdeling(
+    master_df: pd.DataFrame, 
+    zones: dict[str, tuple[float, float]] | None = None
+) -> pd.DataFrame:
+    """
+    Berekent hoeveel tijd (en percentage) er in elke hartslagzone is doorgebracht.
+    Werk met alle samengevoegde seconden/metingen uit de master dataset.
+    """
+    if zones is None:
+        zones = ATLEET.hr_zones
+
+    if "hartslag" not in master_df.columns or master_df["hartslag"].isna().all():
+        raise KeyError("De kolom 'hartslag' ontbreekt of bevat geen data in master_df.")
+
+    hr_series = master_df["hartslag"].dropna()
+    totaal_metingen = len(hr_series)
+
+    zone_data = []
+    for zone_naam, (min_hr, max_hr) in zones.items():
+        aantal = ((hr_series >= min_hr) & (hr_series < max_hr)).sum()
+        pct = (aantal / totaal_metingen * 100.0) if totaal_metingen > 0 else 0.0
+        zone_data.append({
+            "zone": zone_naam,
+            "aantal_metingen": aantal,
+            "percentage": pct
+        })
+
+    return pd.DataFrame(zone_data)

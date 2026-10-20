@@ -17,10 +17,23 @@ PROJECTMAP = Path(__file__).resolve().parents[1]
 class AtleetConfig:
     """Persoonlijke fysiologische gegevens van de atleet."""
 
-    max_hartslag: int = 187        # Maximale hartslag (slagen per minuut)
+    max_hartslag: int = 189        # Maximale hartslag (slagen per minuut)
     drempel_hartslag: int = 173    # Hartslag op de anaerobe drempel (slagen per minuut)
     ftp: int = 197                 # Functional Threshold Power (watt)
+    gewicht_kg: float = 53.0       # Lichaamsgewicht atleet (kg)
+    leeftijd: int = 31             # Leeftijd atleet (jaren)
 
+    @property
+    def hr_zones(self) -> dict[str, tuple[float, float]]:
+        """Berekent de 5 hartslagzones (bpm) op basis van Max HR."""
+        m = self.max_hartslag
+        return {
+            "Z1 Herstel": (0, 0.60 * m),            # < 112 bpm
+            "Z2 Duur": (0.60 * m, 0.70 * m),        # 112 - 131 bpm
+            "Z3 Tempo": (0.70 * m, 0.80 * m),       # 131 - 150 bpm
+            "Z4 Drempel": (0.80 * m, 0.90 * m),      # 150 - 168 bpm
+            "Z5 Maximaal": (0.90 * m, 220.0),       # > 168 bpm
+        }
 
 @dataclass(frozen=True)
 class PadConfig:

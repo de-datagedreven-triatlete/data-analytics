@@ -1,5 +1,4 @@
 """De grafieken van de analyses.
-
 Elke functie tekent één grafiek op basis van gegevens die al zijn berekend met
 `utils.berekeningen`, en geeft de matplotlib-figuur terug. Opslaan gaat met
 `utils.visualisatie.exporteer_afbeelding`. In deze module staan dus geen berekeningen
@@ -12,7 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from utils.config import ANALYSE, KLEUREN
+from utils.config import KLEUREN
 from utils.visualisatie import (
     formatteer_duur,
     formatteer_tijdas,
@@ -24,24 +23,22 @@ from utils.visualisatie import (
 
 _LEGENDA = dict(facecolor="#121212", edgecolor="#333333", labelcolor="white", fontsize=9)
 
-
 # ---------------------------------------------------------------------------
-# Triatlon
+# Triatlon & Multi-sport
 # ---------------------------------------------------------------------------
-def teken_race_opbouw(df: pd.DataFrame, fases: list[dict], titel: str = "RACE OPBOUW: RUN - BIKE - RUN"):
-    """Tekent hartslag en snelheid over de wedstrijd, met de fasen (run, wissel, fiets) erin aangegeven.
-
-    Args:
-        df: Activiteit met `verstreken_minuten`, `hartslag` en `snelheid_kmh`.
-        fases: Lijst met per fase `naam`, `start` en `eind` (minuten), zie `detecteer_triatlonfasen`.
-    """
+def teken_race_opbouw(
+    df: pd.DataFrame, 
+    fases: list[dict], 
+    titel: str = "RACE OPBOUW: RUN - BIKE - RUN"
+) -> plt.Figure:
+    """Tekent hartslag en snelheid over de wedstrijd, met de fasen (run, wissel, fiets) erin aangegeven."""
     pas_stijl_toe()
     fig, ax_hartslag = plt.subplots(figsize=(10, 6), dpi=300)
-
-    heeft_hartslag = df["hartslag"].notna().any()
+    
+    heeft_hartslag = "hartslag" in df.columns and df["hartslag"].notna().any()
     max_hr = df["hartslag"].max() if heeft_hartslag else 180
     min_hr = df["hartslag"].min() if heeft_hartslag else 100
-
+    
     for fase in fases:
         ax_hartslag.axvline(fase["start"], color="#333745", linestyle=":", linewidth=1.0)
         midden = (fase["start"] + fase["eind"]) / 2
@@ -49,88 +46,83 @@ def teken_race_opbouw(df: pd.DataFrame, fases: list[dict], titel: str = "RACE OP
                          fontweight="bold", color=KLEUREN["gedempt"], fontsize=9)
     if fases:
         ax_hartslag.axvline(fases[-1]["eind"], color="#333745", linestyle=":", linewidth=1.0)
-
-    ax_hartslag.plot(df["verstreken_minuten"], df["hartslag"], color=KLEUREN["hartslag"], linewidth=1.8, alpha=0.95)
-    ax_hartslag.set_ylabel("Hartslag (bpm)", color=KLEUREN["hartslag"], fontweight="bold", fontsize=11)
-    ax_hartslag.tick_params(axis="y", labelcolor=KLEUREN["hartslag"])
+        
+    if heeft_hartslag:
+        ax_hartslag.plot(df["verstreken_minuten"], df["hartslag"], color=KLEUREN["hartslag"], linewidth=1.8, alpha=0.95)
+        ax_hartslag.set_ylabel("Hartslag (bpm)", color=KLEUREN["hartslag"], fontweight="bold", fontsize=11)
+        ax_hartslag.tick_params(axis="y", labelcolor=KLEUREN["hartslag"])
+        ax_hartslag.set_ylim(min_hr - 8, max_hr + 16)
 
     ax_snelheid = ax_hartslag.twinx()
-    ax_snelheid.plot(df["verstreken_minuten"], df["snelheid_kmh"], color=KLEUREN["snelheid"], linewidth=1.1, alpha=0.65)
-    ax_snelheid.set_ylabel("Snelheid (km/u)", color=KLEUREN["snelheid"], fontweight="bold", fontsize=11)
-    ax_snelheid.tick_params(axis="y", labelcolor=KLEUREN["snelheid"])
-    ax_snelheid.set_ylim(0, df["snelheid_kmh"].max() * 1.25)
+    if "snelheid_kmh" in df.columns:
+        ax_snelheid.plot(df["verstreken_minuten"], df["snelheid_kmh"], color=KLEUREN["snelheid"], linewidth=1.1, alpha=0.65)
+        ax_snelheid.set_ylabel("Snelheid (km/u)", color=KLEUREN["snelheid"], fontweight="bold", fontsize=11)
+        ax_snelheid.tick_params(axis="y", labelcolor=KLEUREN["snelheid"])
+        ax_snelheid.set_ylim(0, df["snelheid_kmh"].max() * 1.25 if df["snelheid_kmh"].notna().any() else 40)
 
     formatteer_tijdas(ax_hartslag)
-    ax_hartslag.set_ylim(min_hr - 8, max_hr + 16)
     ax_hartslag.grid(True, axis="y", linestyle=":", alpha=0.12, color="#FFFFFF")
     ax_hartslag.spines["top"].set_visible(False)
     ax_snelheid.spines["top"].set_visible(False)
     ax_hartslag.set_title(titel, fontsize=13, fontweight="bold", pad=25, color=KLEUREN["tekst"])
-
     fig.tight_layout()
     return fig
 
 
-def teken_run_vergelijking(run1: pd.DataFrame, run2: pd.DataFrame, titel: str = "VERGELIJKING: RUN 1 VERSUS RUN 2"):
-    """Vergelijkt hartslag bij gelijke snelheid in run 1 (fris) en run 2 (vermoeid).
-
-    Door de punten van elke run loopt een trendlijn (lineaire regressie op de gladgestreken waarden).
-    Ligt de trendlijn van run 2 hoger, dan kostte dezelfde snelheid meer hartslag.
-
-    Args:
-        run1, run2: Resultaat van `selecteer_runs_voor_vergelijking`.
-    """
+def teken_run_vergelijking(
+    run1: pd.DataFrame, 
+    run2: pd.DataFrame, 
+    titel: str = "VERGELIJKING: RUN 1 VERSUS RUN 2"
+) -> plt.Figure:
+    """Vergelijkt hartslag bij gelijke snelheid in run 1 (fris) en run 2 (vermoeid)."""
     pas_stijl_toe()
     fig, ax = plt.subplots(figsize=(9, 7), dpi=300)
     kleur1, kleur2 = KLEUREN["hartslag"], KLEUREN["snelheid"]
-
+    
     ax.scatter(run1["snelheid_kmh"], run1["hartslag"], color=kleur1, alpha=0.25, label="Run 1 (fris)", s=25)
     ax.scatter(run2["snelheid_kmh"], run2["hartslag"], color=kleur2, alpha=0.25, label="Run 2 (vermoeid)", s=25)
-
+    
     for run, kleur, label in ((run1, kleur1, "Trend run 1"), (run2, kleur2, "Trend run 2")):
         if len(run) > 1:
             coefficienten = np.polyfit(run["snelheid_glad_kmh"], run["hartslag_glad"], 1)
             x = np.linspace(run["snelheid_glad_kmh"].min(), run["snelheid_glad_kmh"].max(), 100)
             ax.plot(x, np.poly1d(coefficienten)(x), color=kleur, linewidth=3.5, label=label)
-
+            
     ax.set_xlabel("Snelheid (km/u)", fontsize=12, fontweight="bold", labelpad=10, color=KLEUREN["gedempt"])
     ax.set_ylabel("Hartslag (bpm)", fontsize=12, fontweight="bold", labelpad=10, color=KLEUREN["gedempt"])
     ax.set_title(titel, fontsize=15, fontweight="bold", pad=20, color=KLEUREN["tekst"])
     ax.legend(frameon=True, facecolor=KLEUREN["kaart"], edgecolor="none", fontsize=10, loc="upper left")
-
     fig.tight_layout()
     return fig
 
-
 # ---------------------------------------------------------------------------
-# Wandeletappes
+# Klimmen & Wandelen
 # ---------------------------------------------------------------------------
-def teken_vam_dashboard(df: pd.DataFrame, venster_s: int = ANALYSE.vam_venster_s, etappe_nr: int | None = None):
-    """Tekent klim-intensiteit (VAM) tegen hartslag, met het hoogteprofiel op de achtergrond.
-
-    Args:
-        df: Resultaat van `bereken_vam`.
-        venster_s: Het tijdvenster (s) waarmee de VAM is berekend; alleen voor de legenda.
-    """
+def teken_vam_dashboard(
+    df: pd.DataFrame, 
+    venster_s: int = 300, 
+    hoogte_glad_venster: int = 15,
+    etappe_nr: int | None = None
+) -> plt.Figure:
+    """Tekent klim-intensiteit (VAM) tegen hartslag, met het hoogteprofiel op de achtergrond."""
     pas_stijl_toe()
     fig, ax_vam = plt.subplots(figsize=(13.33, 7.5), dpi=300)
     x = df["actieve_minuten"]
-
-    hoogte_glad = df["hoogte"].rolling(window=ANALYSE.hoogte_glad_venster, center=True, min_periods=1).mean()
+    hoogte_glad = df["hoogte"].rolling(window=hoogte_glad_venster, center=True, min_periods=1).mean()
     teken_hoogteprofiel(ax_vam, x, hoogte_glad, ruimte_boven=0.4)
-
+    
     ax_vam.plot(x, df["vam_klim"], color=KLEUREN["snelheid"], linewidth=2.2, label=f"VAM ({venster_s} s gem.)", zorder=3)
     ax_vam.set_ylabel("VAM (m/u)", color=KLEUREN["snelheid"], fontweight="bold")
     ax_vam.tick_params(axis="y", labelcolor=KLEUREN["snelheid"])
-
+    
     geldige_vam = df["vam_klim"].dropna()
     max_vam = int(geldige_vam.max()) if not geldige_vam.empty else 0
     gem_vam = int(geldige_vam.mean()) if not geldige_vam.empty else 0
     if max_vam > 0:
         ax_vam.set_ylim(0, max_vam * 1.25)
-
+        
     gem_hartslag_tekst = "n.v.t."
-    if df["hartslag"].notna().any():
+    if "hartslag" in df.columns and df["hartslag"].notna().any():
         ax_hartslag = ax_vam.twinx()
         ax_hartslag.spines["right"].set_position(("outward", 10))
         hartslag_glad = df["hartslag"].rolling(window=60, min_periods=1).mean()
@@ -139,14 +131,13 @@ def teken_vam_dashboard(df: pd.DataFrame, venster_s: int = ANALYSE.vam_venster_s
         ax_hartslag.tick_params(axis="y", labelcolor=KLEUREN["hartslag"])
         ax_hartslag.set_ylim(int(hartslag_glad.min() - 15), int(hartslag_glad.max() + 15))
         gem_hartslag_tekst = f"{int(df['hartslag'].mean())} bpm"
-
+        
     voeg_statistiekenblok_toe(ax_vam, [
-        f"Totale stijging: +{int(df['totale_stijging_m'].iloc[-1])} m",
+        f"Totale stijging: +{int(df['totale_stijging_m'].iloc[-1])} m" if "totale_stijging_m" in df.columns else "Stijging: N/A",
         f"Gem. VAM: {gem_vam} m/u",
         f"Max. VAM: {max_vam} m/u",
         f"Gem. hartslag: {gem_hartslag_tekst}",
     ])
-
     ax_vam.set_xlabel("Actieve tijd (minuten)", fontweight="bold", color=KLEUREN["tekst"])
     fig.suptitle(maak_titel("Klim-intensiteit (VAM) versus inspanning (hartslag)", etappe_nr),
                  fontsize=14, fontweight="bold", y=0.96, color=KLEUREN["tekst"])
@@ -154,175 +145,40 @@ def teken_vam_dashboard(df: pd.DataFrame, venster_s: int = ANALYSE.vam_venster_s
     return fig
 
 
-def teken_helling_cadans(klim: pd.DataFrame, resultaat: dict, etappe_nr: int | None = None):
-    """Tekent de cadans (stappen per minuut) tegen de helling, met regressielijn.
-
-    Args:
-        klim, resultaat: Uitkomst van `analyseer_helling_cadans`.
-    """
-    pas_stijl_toe()
-    fig, ax = plt.subplots(figsize=(10, 6), dpi=300)
-    ax.set_facecolor(KLEUREN["kaart"])
-
-    spreiding = ax.scatter(klim["helling_pct"], klim["cadans"], c=klim["hoogte"], cmap="viridis",
-                           alpha=0.6, edgecolors="none", s=25, label="Metingen")
-
-    x = np.array([klim["helling_pct"].min(), klim["helling_pct"].max()])
-    y = resultaat["intercept"] + resultaat["hellingscoefficient"] * x
-    ax.plot(x, y, color=KLEUREN["hartslag"], linewidth=2.5,
-            label=f"Trendlijn ({resultaat['hellingscoefficient']:+.2f} spm per +1%)")
-
-    ax.set_xlabel("Helling (%)", fontweight="bold", color=KLEUREN["tekst"])
-    ax.set_ylabel("Cadans (stappen per minuut)", fontweight="bold", color=KLEUREN["tekst"])
-    ax.set_title(maak_titel("Terreinimpact: helling versus cadans", etappe_nr), fontweight="bold", pad=15, color=KLEUREN["tekst"])
-
-    kleurbalk = fig.colorbar(spreiding, ax=ax)
-    kleurbalk.set_label("Hoogte (m)", fontweight="bold", color=KLEUREN["tekst"])
-    kleurbalk.ax.yaxis.set_tick_params(color=KLEUREN["tekst"])
-    plt.setp(kleurbalk.ax.get_yticklabels(), color=KLEUREN["tekst"])
-
-    voeg_statistiekenblok_toe(ax, [
-        f"• Cadansverandering per +10% helling: {resultaat['verandering_per_10_pct']:+.1f} spm",
-        f"• Gem. cadans bij klimmen: {int(resultaat['gemiddelde_cadans'])} spm",
-        f"• Max. helling geanalyseerd: {resultaat['max_helling_pct']:.1f}%",
-    ], x=0.03)
-
-    ax.grid(True, linestyle="--", alpha=0.2)
-    ax.legend(loc="lower left", **_LEGENDA)
-    fig.tight_layout()
-    return fig
-
-
-def teken_herstelhartslag(df: pd.DataFrame, pauzes: pd.DataFrame, tijden: dict, etappe_nr: int | None = None):
-    """Tekent de hartslag met de rustpauzes en per pauze de daling in de eerste minuut.
-
-    Args:
-        df: Activiteit met `verstreken_minuten`, `hartslag`, `hartslag_glad` en `hoogte`.
-        pauzes: Resultaat van `bereken_herstelhartslag`.
-        tijden: Resultaat van `bereken_beweegtijden`.
-    """
-    pas_stijl_toe()
-    fig, ax_hartslag = plt.subplots(figsize=(13.33, 7.5), dpi=300)
-    x = df["verstreken_minuten"]
-
-    if df["hoogte"].notna().any():
-        teken_hoogteprofiel(ax_hartslag, x, df["hoogte"].interpolate().ffill().bfill(), ruimte_boven=0.4)
-
-    ax_hartslag.plot(x, df["hartslag_glad"], color=KLEUREN["hartslag"], linewidth=1.8, label="Hartslag (bpm)", zorder=12)
-    ax_hartslag.set_ylabel("Hartslag (bpm)", color=KLEUREN["hartslag"], fontweight="bold")
-    ax_hartslag.tick_params(axis="y", labelcolor=KLEUREN["hartslag"])
-    ax_hartslag.set_ylim(int(df["hartslag"].min() - 10), int(df["hartslag"].max() + 15))
-
-    for nummer, pauze in enumerate(pauzes.itertuples()):
-        ax_hartslag.axvspan(pauze.start_minuut, pauze.start_minuut + pauze.duur_min, color=KLEUREN["rust"],
-                            alpha=0.18, zorder=11, label="Rustpauze" if nummer == 0 else None)
-        ax_hartslag.annotate(
-            f"-{int(pauze.herstel_bpm)} bpm",
-            xy=(pauze.start_minuut, pauze.hartslag_start), xytext=(pauze.start_minuut, pauze.hartslag_start + 6),
-            fontsize=8.5, fontweight="bold", color=KLEUREN["tekst"], ha="center", zorder=13,
-            arrowprops=dict(arrowstyle="->", color=KLEUREN["rust"], lw=1.2),
-        )
-
-    voeg_statistiekenblok_toe(ax_hartslag, [
-        f"Bewogen tijd:    {formatteer_duur(tijden['bewogen_s'])}",
-        f"Verstreken tijd: {formatteer_duur(tijden['verstreken_s'])}",
-        f"Gem. hartslag:   {int(df['hartslag'].mean())} bpm",
-        f"Max. hartslag:   {int(df['hartslag'].max())} bpm",
-    ], x=0.03, y=0.93, vaste_breedte=True, fontsize=9.5)
-
-    ax_hartslag.legend(loc="upper right", bbox_to_anchor=(0.98, 0.98), facecolor=KLEUREN["blok"],
-                       edgecolor=KLEUREN["blokrand"], labelcolor="white", fontsize=9)
-    ax_hartslag.set_xlabel("Verstreken tijd (minuten)", fontweight="bold", color=KLEUREN["tekst"])
-    fig.suptitle(maak_titel("Herstelhartslag (HRR)", etappe_nr), fontsize=14, fontweight="bold", y=0.96, color=KLEUREN["tekst"])
-    fig.tight_layout()
-    return fig
-
-
-def teken_beweegratio(raster: pd.DataFrame, resultaat: dict, etappe_nr: int | None = None):
-    """Tekent de snelheid met de rustpauzes, plus een cirkeldiagram van actief versus stilstand.
-
-    Args:
-        raster, resultaat: Uitkomst van `bereken_beweegratio`.
-    """
-    pas_stijl_toe()
-    fig = plt.figure(figsize=(14, 7))
-    kolommen = fig.add_gridspec(1, 2, width_ratios=[3.2, 1], wspace=0.15)
-    ax_hoofd = fig.add_subplot(kolommen[0])
-    ax_cirkel = fig.add_subplot(kolommen[1])
-    x = raster["verstreken_minuten"]
-
-    if raster["hoogte"].notna().any():
-        teken_hoogteprofiel(ax_hoofd, x, raster["hoogte"], toon_as=True, ruimte_boven=0.6)
-
-    max_snelheid = max(raster["snelheid_glad_kmh"].max() * 1.15, 5.0)
-    ax_hoofd.fill_between(x, 0, max_snelheid, where=raster["is_pauze"], color=KLEUREN["rust"], alpha=0.28,
-                          step="post", label="Rustpauze")
-    ax_hoofd.plot(x, raster["snelheid_glad_kmh"], color=KLEUREN["snelheid"], linewidth=2.0, label="Snelheid (km/u)")
-
-    ax_hoofd.set_xlabel("Verstreken tijd (minuten)", color="white", fontsize=11, fontweight="bold", labelpad=8)
-    ax_hoofd.set_ylabel("Snelheid (km/u)", color=KLEUREN["snelheid"], fontsize=11, fontweight="bold", labelpad=8)
-    ax_hoofd.set_ylim(bottom=-0.1, top=max_snelheid)
-    ax_hoofd.grid(True, linestyle="--", alpha=0.15)
-    ax_hoofd.set_title(maak_titel("Beweegratio (actief versus stilstand)", etappe_nr),
-                       color="white", fontsize=13, fontweight="bold", pad=15)
-
-    ratio = resultaat["beweegratio_pct"]
-    voeg_statistiekenblok_toe(ax_hoofd, [
-        f"Totale tijd:   {formatteer_duur(resultaat['totale_tijd_s'], 'kort')}",
-        f"In beweging:  {formatteer_duur(resultaat['beweging_s'], 'kort')} ({ratio:.1f}%)",
-        f"Stilstand:    {formatteer_duur(resultaat['stilstand_s'], 'kort')} ({100 - ratio:.1f}%)",
-    ], x=0.03, y=0.93, vaste_breedte=True, fontsize=9.5)
-    ax_hoofd.legend(loc="upper right", facecolor=KLEUREN["blok"], edgecolor=KLEUREN["blokrand"], labelcolor="white", fontsize=9)
-
-    ax_cirkel.pie([ratio, max(0, 100 - ratio)], colors=[KLEUREN["goed"], KLEUREN["rust"]], startangle=90,
-                  counterclock=False, wedgeprops=dict(width=0.26, edgecolor=KLEUREN["achtergrond"], linewidth=3))
-    ax_cirkel.text(0, 0, f"{int(round(ratio))}%\nActief", ha="center", va="center", fontsize=14, fontweight="bold", color="white")
-    ax_cirkel.set_title("Verhouding actief / stilstand", color="white", fontsize=11, fontweight="bold", pad=12)
-
-    fig.subplots_adjust(left=0.07, right=0.93, wspace=0.25)
-    return fig
-
-
-def teken_cardiac_drift(actief: pd.DataFrame, resultaat: dict, etappe_nr: int | None = None):
-    """Tekent snelheid en hartslag over de actieve tijd, met de efficiëntiefactor van beide helften.
-
-    De efficiëntiefactor (EF) is de hartslag per km/u gecorrigeerde snelheid. Is de EF in de
-    tweede helft hoger, dan kostte dezelfde inspanning meer hartslag: cardiac drift.
-
-    Args:
-        actief, resultaat: Uitkomst van `bereken_cardiac_drift`.
-    """
+def teken_cardiac_drift(actief: pd.DataFrame, resultaat: dict, etappe_nr: int | None = None) -> plt.Figure:
+    """Tekent snelheid en hartslag over de actieve tijd, met de efficiëntiefactor van beide helften."""
     pas_stijl_toe()
     fig = plt.figure(figsize=(14, 7))
     kolommen = fig.add_gridspec(1, 2, width_ratios=[3.2, 1], wspace=0.30)
     ax_snelheid = fig.add_subplot(kolommen[0])
     ax_hartslag = ax_snelheid.twinx()
     ax_ef = fig.add_subplot(kolommen[1])
+    
     x = actief["actieve_minuten"]
-
     teken_hoogteprofiel(ax_snelheid, x, actief["hoogte_glad"], ruimte_boven=0.15)
-
+    
     ax_snelheid.plot(x, actief["snelheid_glad_kmh"], color=KLEUREN["snelheid"], linewidth=1.8)
     ax_snelheid.set_xlabel("Actieve tijd (minuten)", color="white", fontsize=11, fontweight="bold", labelpad=8)
     ax_snelheid.set_ylabel("Snelheid (km/u)", color=KLEUREN["snelheid"], fontsize=11, fontweight="bold", labelpad=8)
     ax_snelheid.tick_params(axis="y", colors=KLEUREN["snelheid"])
     ax_snelheid.set_ylim(0, max(actief["snelheid_glad_kmh"].max() * 1.15, 5))
     ax_snelheid.grid(False)
-
+    
     ax_hartslag.plot(x, actief["hartslag_glad"], color=KLEUREN["hartslag"], linewidth=1.8)
     ax_hartslag.set_ylabel("Hartslag (bpm)", color=KLEUREN["hartslag"], fontsize=11, fontweight="bold", labelpad=8)
     ax_hartslag.tick_params(axis="y", colors=KLEUREN["hartslag"])
     ax_hartslag.set_ylim(actief["hartslag_glad"].min() * 0.85, actief["hartslag_glad"].max() * 1.10)
     ax_hartslag.grid(False)
-
+    
     ax_snelheid.set_title(maak_titel("Cardiac drift en hoogte-impact", etappe_nr), color="white", fontsize=13, fontweight="bold", pad=15)
     drift = resultaat["drift_pct"]
+    
     voeg_statistiekenblok_toe(ax_snelheid, [
         f"Gem. hartslag (helft 1): {resultaat['gem_hartslag_helft1']:.0f} bpm",
         f"Gem. hartslag (helft 2): {resultaat['gem_hartslag_helft2']:.0f} bpm",
         f"Gecorrigeerde drift:    {drift:+.1f}%",
     ], y=0.95, vaste_breedte=True, fontsize=9.5)
-
+    
     drift_kleur = KLEUREN["hartslag"] if drift > 5.0 else KLEUREN["waarschuwing"] if drift > 0 else KLEUREN["snelheid"]
     ef = [resultaat["ef_helft1"], resultaat["ef_helft2"]]
     staven = ax_ef.bar(["Helft 1", "Helft 2"], ef, color=[KLEUREN["snelheid"], drift_kleur], width=0.55)
@@ -333,322 +189,358 @@ def teken_cardiac_drift(actief: pd.DataFrame, resultaat: dict, etappe_nr: int | 
     ax_ef.set_ylabel("Hartslag per km/u", color="white", fontsize=10, fontweight="bold")
     ax_ef.set_title(f"Efficiëntiefactor\nDrift {drift:+.1f}%", color="white", fontsize=11, fontweight="bold", pad=12)
     ax_ef.grid(False)
-
     fig.subplots_adjust(left=0.07, right=0.93, wspace=0.30)
     return fig
 
-
-def teken_hoogtefactor(df: pd.DataFrame, etappe_nr: int | None = None):
-    """Vergelijkt de afstand op een vlakke kaart (2D) met de afstand over het echte terrein (3D).
-
-    Boven: 2D- en 3D-afstand met het hoogteprofiel. Onder: de cumulatieve extra meters door de steilte.
-
-    Args:
-        df: Resultaat van `bereken_3d_afstand`.
+def teken_master_slide1_overzicht(
+    df_master: pd.DataFrame, 
+    totaal_stats: dict,
+    df_zones: pd.DataFrame | None = None,
+    titel: str = "MASTER ANALYSE: STUBAIER HÖHENWEG"
+) -> plt.Figure:
+    """
+    Slide 1: Master Overzicht met:
+    - Links Boven: Tabel met kerngetallen (inclusief Gem. Hartslag)
+    - Rechts Boven: Donut Chart met titel direct erin/boven en uitgelijnde legenda
+    - Onder: Hoogtemeters staafgrafiek per etappe (Stijging vs Daling)
     """
     pas_stijl_toe()
-    fig, (ax_boven, ax_onder) = plt.subplots(2, 1, figsize=(12, 7.5), sharex=True,
-                                              gridspec_kw={"height_ratios": [2, 1]})
-    x = df["afstand_2d_km"]
-
-    teken_hoogteprofiel(ax_boven, x, df["hoogte_glad"], toon_as=True, ruimte_boven=0.3)
-    ax_boven.plot(x, x, color=KLEUREN["gedempt"], linestyle="--", linewidth=2, label="2D-afstand (platte kaart)")
-    ax_boven.plot(x, df["afstand_3d_km"], color=KLEUREN["snelheid"], linewidth=2.5, label="3D-afstand (werkelijk)")
-    ax_boven.set_ylabel("Berekende afstand (km)", color="white", fontsize=10, fontweight="bold")
-    ax_boven.set_title(maak_titel("De hoogtefactor (2D plat versus 3D werkelijk)", etappe_nr),
-                       color="white", fontsize=12, fontweight="bold", pad=15)
-    ax_boven.grid(False)
-
-    totaal_2d = df["afstand_2d_km"].iloc[-1]
-    totaal_3d = df["afstand_3d_km"].iloc[-1]
-    extra_m = df["cumulatief_extra_m"].iloc[-1]
-    extra_pct = extra_m / (totaal_2d * 1000) * 100 if totaal_2d > 0 else 0.0
-    voeg_statistiekenblok_toe(ax_boven, [
-        f"Totale 2D-afstand: {totaal_2d:.2f} km",
-        f"Totale 3D-afstand: {totaal_3d:.2f} km",
-        "---------------------------",
-        f"Extra steilte-meters: +{extra_m:.0f} m (+{extra_pct:.1f}%)",
-    ])
-    ax_boven.legend(loc="lower right", facecolor="#121212", edgecolor="#333333", labelcolor="white")
-
-    ax_onder.plot(x, df["cumulatief_extra_m"], color=KLEUREN["hartslag"], linewidth=2, label="Cumulatieve extra 3D-meters")
-    ax_onder.fill_between(x, 0, df["cumulatief_extra_m"], color=KLEUREN["hartslag"], alpha=0.25)
-    ax_onder.set_xlabel("Kaartafstand (km)", color="white", fontsize=10, fontweight="bold")
-    ax_onder.set_ylabel("Extra meters (m)", color="white", fontsize=10, fontweight="bold")
-    ax_onder.grid(False)
-    ax_onder.legend(loc="lower right", facecolor="#121212", edgecolor="#333333", labelcolor="white")
-
-    fig.tight_layout()
-    return fig
-
-
-def teken_hrv_readiness(df_etappe: pd.DataFrame, herstel: pd.DataFrame, etappe_nr: int):
-    """Tekent de hartslag over de etappe en daaronder het verloop van HRV en readiness per dag.
-
-    De dag van de etappe wordt in de onderste grafieken gemarkeerd.
-
-    Args:
-        df_etappe: Activiteit met `hartslag`, `hoogte` en (optioneel) `afstand_m`.
-        herstel: Resultaat van `lees_herstelgegevens` (`dag`, `hrv_rmssd`, `readiness_score`).
-        etappe_nr: Nummer van de dag/etappe die wordt gemarkeerd.
-    """
-    pas_stijl_toe()
-    fig = plt.figure(figsize=(12, 9))
-    raster = gridspec.GridSpec(2, 2, height_ratios=[1.3, 1], width_ratios=[1, 1], figure=fig)
-
-    # --- Hartslag en hoogte tijdens de etappe ---
-    ax_hoofd = fig.add_subplot(raster[0, :])
-    if df_etappe["afstand_m"].notna().any():
-        x, x_label = df_etappe["afstand_m"] / 1000.0, "Afstand (km)"
-    else:
-        x, x_label = np.arange(len(df_etappe)), "Meting (nummer)"
-
-    if df_etappe["hoogte"].notna().any():
-        teken_hoogteprofiel(ax_hoofd, x, df_etappe["hoogte"].interpolate().ffill().bfill(), toon_as=True, ruimte_boven=0.1)
-
-    hartslag_glad = df_etappe["hartslag"].rolling(window=60, min_periods=1).mean()
-    ax_hoofd.plot(x, hartslag_glad, color=KLEUREN["hartslag"], linewidth=2.2, label="Hartslag (60 s gem.)", zorder=4)
-
-    dag_nu = herstel[herstel["dag"] == etappe_nr]
-    regels = [f"Gem. hartslag: {df_etappe['hartslag'].mean():.0f} bpm", f"Max. hartslag: {df_etappe['hartslag'].max():.0f} bpm"]
-    if not dag_nu.empty:
-        regels += [f"HRV: {dag_nu['hrv_rmssd'].iloc[0]:.0f} ms", f"Readiness: {dag_nu['readiness_score'].iloc[0]:.0f}"]
-    voeg_statistiekenblok_toe(ax_hoofd, regels, y=0.90, fontsize=9)
-
-    ax_hoofd.set_xlabel(x_label, color="white", fontsize=10, fontweight="bold")
-    ax_hoofd.set_ylabel("Hartslag (bpm)", color=KLEUREN["hartslag"], fontsize=10, fontweight="bold")
-    ax_hoofd.set_title(maak_titel("Hartslag, HRV en readiness", etappe_nr), color="white", fontsize=11, fontweight="bold", pad=12)
-    ax_hoofd.grid(False)
-    ax_hoofd.legend(loc="lower left", **{**_LEGENDA, "fontsize": 8})
-
-    dagen = [f"Dag {dag}" for dag in herstel["dag"]]
-    positie = herstel.index[herstel["dag"] == etappe_nr]
-
-    # --- HRV-verloop ---
-    ax_hrv = fig.add_subplot(raster[1, 0])
-    ax_hrv.plot(dagen, herstel["hrv_rmssd"], color=KLEUREN["snelheid"], marker="o", linewidth=2.5, markersize=8, label="HRV-verloop")
-    if len(positie) > 0:
-        i = positie[0]
-        is_laagste = herstel["hrv_rmssd"].idxmin() == i
-        ax_hrv.scatter(dagen[i], herstel["hrv_rmssd"].iloc[i], color=KLEUREN["hartslag"], s=120, zorder=5,
-                       edgecolor="white", linewidth=1.5, label=f"Dag {etappe_nr}" + (" (laagste)" if is_laagste else ""))
-    ax_hrv.set_title("HRV-status", color="white", fontsize=11, fontweight="bold", pad=10)
-    ax_hrv.set_ylabel("Milliseconden (ms)", color="white", fontsize=9, fontweight="bold")
-    ax_hrv.grid(False)
-    ax_hrv.legend(loc="lower left", **{**_LEGENDA, "fontsize": 8})
-
-    # --- Readiness ---
-    ax_readiness = fig.add_subplot(raster[1, 1])
-    staven = ax_readiness.bar(dagen, herstel["readiness_score"], color=KLEUREN["snelheid"], width=0.5)
-    if len(positie) > 0:
-        staven[positie[0]].set_color(KLEUREN["hartslag"])
-    for staaf in staven:
-        ax_readiness.text(staaf.get_x() + staaf.get_width() / 2, staaf.get_height() + 2, f"{int(staaf.get_height())}",
-                          ha="center", va="bottom", color="white", fontsize=8, fontweight="bold")
-    ax_readiness.set_title("Training readiness", color="white", fontsize=11, fontweight="bold", pad=10)
-    ax_readiness.set_ylabel("Score (0-100)", color="white", fontsize=9, fontweight="bold")
-    ax_readiness.set_ylim(0, 105)
-    ax_readiness.grid(False)
-
-    fig.tight_layout()
-    return fig
-
-
-def teken_cadanstrend(gefilterd: pd.DataFrame, profiel: pd.DataFrame, baseline_spm: float, etappe_nr: int,
-                      terrein: str = "klim", grens_pct: float = ANALYSE.terrein_grens_pct,
-                      rooster_m: float = ANALYSE.terrein_rooster_m):
-    """Tekent het verloop van de cadans op één terreintype, vergeleken met de baseline van week 1.
-
-    Args:
-        gefilterd: Resultaat van `bereken_cadanstrend` op het gefilterde terrein.
-        profiel: Het volledige terreinprofiel (`maak_terreinprofiel`), voor het hoogteprofiel.
-        baseline_spm: Gemiddelde klimcadans in de baseline-periode (stappen per minuut).
-        terrein: 'klim', 'afdaling' of 'vlak'; bepaalt de titel.
-    """
-    titels = {
-        "klim": f"Cadanstrend bij klimmen vanaf +{grens_pct:.1f}%",
-        "afdaling": f"Cadanstrend bij dalen vanaf -{grens_pct:.1f}%",
-        "vlak": f"Cadanstrend op vlak terrein (-{grens_pct:.1f}% tot +{grens_pct:.1f}%)",
-    }
-    pas_stijl_toe()
-    fig, ax = plt.subplots(figsize=(12, 6))
-
-    teken_hoogteprofiel(ax, profiel["afstand_km"], profiel["hoogte"], toon_as=True, ruimte_boven=0.3)
-
-    if gefilterd.empty:
-        ax.text(0.5, 0.5, "Geen metingen voor dit terreintype", color="white", ha="center", va="center", transform=ax.transAxes)
-    else:
-        afstand = gefilterd["afstand_km"].to_numpy()
-        cadans = gefilterd["cadans_glad"].to_numpy().copy()
-        cadans[np.r_[False, np.diff(afstand) > 1.5 * rooster_m / 1000.0]] = np.nan  # Lijn onderbreken tussen losse stukken
-
-        gemiddelde = gefilterd["cadans"].mean()
-        ax.plot(afstand, cadans, color=KLEUREN["snelheid"], linewidth=2.2, label=f"Etappe {etappe_nr}", zorder=4)
-        ax.axhline(baseline_spm, color=KLEUREN["hartslag"], linestyle="--", linewidth=1.8, label="Baseline week 1", zorder=3)
-        voeg_statistiekenblok_toe(ax, [
-            f"Gem. cadans etappe {etappe_nr}: {gemiddelde:.1f} spm",
-            f"Baseline week 1: {baseline_spm:.1f} spm",
-            "---------------------------",
-            f"Verschil: {gemiddelde - baseline_spm:+.1f} spm",
-        ])
-
-    ax.set_xlabel("Afstand (km)", color="white", fontsize=10, fontweight="bold")
-    ax.set_ylabel("Cadans (stappen per minuut)", color=KLEUREN["snelheid"], fontsize=10, fontweight="bold")
-    ax.set_title(maak_titel(titels[terrein], None), color="white", fontsize=11, fontweight="bold", pad=12)
-    ax.grid(False)
-    ax.legend(loc="lower right", **{**_LEGENDA, "fontsize": 8})
-
-    fig.tight_layout()
-    return fig
-
-
-def teken_segment_profiel(
-    df_klim: pd.DataFrame,
-    df_rest: pd.DataFrame,
-    df_segment: pd.DataFrame,
-    statistieken: dict,
-    doel_afstand_m: float,
-    etappe_nr: int | None = None
-):
-    """Tekent het hoogteprofiel en markeert het steilste segment van de beklimming.
-   
-    Args:
-        df_klim, df_rest, df_segment, statistieken: Output van `bereken_steilste_segment`.
-        doel_afstand_m: Lengte van het gezochte segment in meters (voor de labels).
-    """
-    pas_stijl_toe()
-    fig, ax = plt.subplots(figsize=(10, 4.5), dpi=300)
-
-    # 1. Bepaal het absolute minimum en maximum van de *gehele* etappe
-    laagste_punt = min(df_klim["hoogte"].min(), df_rest["hoogte"].min())
-    hoogste_punt = max(df_klim["hoogte"].max(), df_rest["hoogte"].max())
-   
-    # 2. Stel de bodem van de grafiek in (met 100m speling eronder)
-    min_elev = max(0, laagste_punt - 100)
-    max_elev = hoogste_punt + 150
-
-    # Lijnen plotten
-    ax.plot(df_klim["afstand_km"], df_klim["hoogte"], color="#888888", linewidth=1.5, label="Beklimming")
-   
-    if not df_segment.empty:
-        ax.plot(df_segment["afstand_km"], df_segment["hoogte"], color=KLEUREN["snelheid"], linewidth=2.5, label=f"Steilste {int(doel_afstand_m)}m")
-        # De arcering vult nu netjes door tot de nieuwe, absolute bodem (min_elev)
-        ax.fill_between(df_segment["afstand_km"], df_segment["hoogte"], min_elev, color=KLEUREN["snelheid"], alpha=0.25)
-   
-    ax.plot(df_rest["afstand_km"], df_rest["hoogte"], color="#333333", linewidth=1.5, linestyle="--", label="Rest van etappe (buiten analyse)")
-    ax.fill_between(df_rest["afstand_km"], df_rest["hoogte"], min_elev, color="#222222", alpha=0.4, hatch="//")
-
-    # Opmaak assen
-    ax.set_xlabel("Afstand (km)", color="white", fontweight="bold", labelpad=10)
-    ax.set_ylabel("Hoogte (m)", color="white", fontweight="bold", labelpad=10)
-    ax.set_title(maak_titel(f"Beklimming - Steilste {int(doel_afstand_m)}m", etappe_nr), color="white", fontsize=11, fontweight="bold", pad=15)
-   
-    # Y-as dynamisch schalen op basis van de gehele etappe
-    ax.set_ylim(min_elev, max_elev)
-    ax.grid(False)
-
-    # Statistiekenblok
-    stats_klim = statistieken["klim"]
-    stats_seg = statistieken["segment"]
-   
-    voeg_statistiekenblok_toe(ax, [
-        f"Totale klim vs. Steilste {int(doel_afstand_m)}m:",
-        f"Duur:         {stats_klim['duur_min']:.1f}m vs {stats_seg['duur_min']:.1f}m",
-        f"VAM:          {stats_klim['vam']} vs {stats_seg['vam']} m/u",
-        f"Gem. HR:      {stats_klim['hartslag']} vs {stats_seg['hartslag']} bpm",
-        f"Gem. helling: {stats_klim['gem_helling_pct']:.1f}% vs {stats_seg['gem_helling_pct']:.1f}%"
-    ], x=0.02, y=0.95, vaste_breedte=True, fontsize=8.5)
-
-    ax.legend(loc="lower right", facecolor="#111111", edgecolor=KLEUREN["blokrand"], labelcolor="white", fontsize=9)
-   
-    fig.tight_layout()
-    return fig
-
-def teken_daal_profiel(df_dalen: pd.DataFrame, statistieken: dict, etappe_nr: int | None = None):
-    """
-    Tekent een 2-paneel grafiek met Daalsnelheid, Cadans, Hartslag en gearceerde aandachtsgebieden.
-    Exact gelijke verhoudingen en stijl als teken_hoogtefactor.
-    """
-    pas_stijl_toe()
-    fig, (ax_boven, ax_onder) = plt.subplots(2, 1, figsize=(12, 7.5), sharex=True, 
-                                             gridspec_kw={"height_ratios": [2, 1]}, dpi=300)
+    fig = plt.figure(figsize=(10.8, 10.8), dpi=300)
     
-    x = df_dalen['elapsed_min'].to_numpy()
+    gs = gridspec.GridSpec(
+        2, 2, 
+        height_ratios=[1.0, 2.0], 
+        width_ratios=[1.10, 0.90], 
+        figure=fig, 
+        hspace=0.28, 
+        wspace=0.10
+    )
     
-    # --- BOVENSTE PANEEL: Snelheid (VDM) en Hoogte ---
-    if df_dalen['hoogte'].notna().any():
-        teken_hoogteprofiel(ax_boven, df_dalen['elapsed_min'], df_dalen['hoogte'], toon_as=True, ruimte_boven=0.15)
-        
-    vdm_array = df_dalen['vdm_rolling'].to_numpy().copy()
-    vdm_array[np.r_[False, np.diff(x) > 10.0]] = np.nan 
-    
-    ax_boven.plot(x, vdm_array, color=KLEUREN["snelheid"], linewidth=2.5, label='VDM', zorder=4)
-    ax_boven.set_ylabel('Verticale Daalsnelheid (m/u)', color=KLEUREN["snelheid"], fontweight='bold', fontsize=10, labelpad=8)
-    ax_boven.tick_params(axis='y', labelcolor=KLEUREN["snelheid"])
-    ax_boven.set_ylim(bottom=0)
-    
-    # --- ONDERSTE PANEEL: Cadans en Hartslag ---
-    if 'cadans_glad' in df_dalen.columns:
-        cadans_array = df_dalen['cadans_glad'].to_numpy().copy()
-        cadans_array[np.r_[False, np.diff(x) > 10.0]] = np.nan
-        
-        ax_onder.plot(x, cadans_array, color=KLEUREN["cadans"], linewidth=2.0, label='Cadans', zorder=4)
-        ax_onder.set_ylabel('Cadans (spm)', color=KLEUREN["cadans"], fontweight='bold', fontsize=10, labelpad=8)
-        ax_onder.tick_params(axis='y', labelcolor=KLEUREN["cadans"])
-        
-    if 'hartslag_glad' in df_dalen.columns:
-        ax_hartslag = ax_onder.twinx()
-        hr_array = df_dalen['hartslag_glad'].to_numpy().copy()
-        hr_array[np.r_[False, np.diff(x) > 10.0]] = np.nan
-        
-        ax_hartslag.plot(x, hr_array, color=KLEUREN["hartslag"], linewidth=2.0, label='Hartslag', zorder=4)
-        ax_hartslag.set_ylabel('Hartslag (bpm)', color=KLEUREN["hartslag"], fontweight='bold', fontsize=10, labelpad=8)
-        ax_hartslag.tick_params(axis='y', labelcolor=KLEUREN["hartslag"])
+    ax_tabel = fig.add_subplot(gs[0, 0])
+    ax_donut = fig.add_subplot(gs[0, 1])
+    ax_bars = fig.add_subplot(gs[1, :])
 
-    lijnen_onder, labels_onder = ax_onder.get_legend_handles_labels()
-    if 'hartslag_glad' in df_dalen.columns:
-        lijnen_hr, labels_hr = ax_hartslag.get_legend_handles_labels()
-        lijnen_onder.extend(lijnen_hr)
-        labels_onder.extend(labels_hr)
-        
-    if lijnen_onder: 
-        ax_onder.legend(lijnen_onder, labels_onder, loc="lower left", bbox_to_anchor=(0.02, 0.05), **_LEGENDA)
+    # --- 1. LINKS BOVEN: Tabel met Kerngetallen ---
+    ax_tabel.axis("off")
 
-    # --- HIGHLIGHTS ---
-    start1, eind1 = 20, 40
-    start2, eind2 = 130, 150
+    stijging_str = f"{totaal_stats['totale_stijging_m']:,.0f}".replace(",", ".")
+    daling_str = f"{totaal_stats['totale_daling_m']:,.0f}".replace(",", ".")
 
-    y_tekst = ax_boven.get_ylim()[1] * 0.05
-    
-    ax_boven.axvspan(start1, eind1, color=KLEUREN["goed"], alpha=0.15, zorder=1)
-    ax_boven.text((start1+eind1)/2, y_tekst, "Fase 1: Start afdaling\n(Hoge efficiëntie)", 
-                  color=KLEUREN["goed"], ha='center', va='bottom', fontweight='bold', fontsize=9.5)
-                  
-    ax_boven.axvspan(start2, eind2, color=KLEUREN["hartslag"], alpha=0.15, zorder=1)
-    ax_boven.text((start2+eind2)/2, y_tekst, "Fase 2: Na 2 uur dalen\n(Spiervermoeidheid)", 
-                  color=KLEUREN["hartslag"], ha='center', va='bottom', fontweight='bold', fontsize=9.5)
-                  
-    ax_onder.axvspan(start1, eind1, color=KLEUREN["goed"], alpha=0.15, zorder=1)
-    ax_onder.axvspan(start2, eind2, color=KLEUREN["hartslag"], alpha=0.15, zorder=1)
-
-    # --- STATISTIEKEN & OPMAAK ---
-    ax_onder.set_xlabel('Tijd in afdaling (minuten)', fontweight='bold', color=KLEUREN["tekst"], fontsize=10, labelpad=8)
-    ax_boven.grid(False)
-    ax_onder.grid(False)
-    
-    regels = [
-        f"Gem. gehele afdaling: {statistieken['gem_vdm']:.0f} m/u",
-        f"Daalsnelheid Fase 1: {statistieken['vdm_start']:.0f} m/u",
-        f"Daalsnelheid Fase 2: {statistieken['vdm_einde']:.0f} m/u",
-        "---------------------------",
-        f"Verval in snelheid:  -{abs(statistieken['decay_percentage']):.1f}%"
+    tabel_data = [
+        ["Totale Afstand", f"{totaal_stats['totale_afstand_km']:.1f} km"],
+        ["Totale Actieve Tijd", f"{totaal_stats['totale_duur_uur']:.1f} uur"],
+        ["Totale Stijging", f"+{stijging_str} m"],
+        ["Totale Daling", f"-{daling_str} m"],
     ]
+
+    tabel = ax_tabel.table(
+        cellText=tabel_data,
+        colLabels=["Metriek", "Waarde"],
+        loc="center",
+        cellLoc="left"
+    )
+    tabel.auto_set_font_size(False)
+    tabel.set_fontsize(8.5)
+    tabel.scale(1.0, 1.35)
     
-    voeg_statistiekenblok_toe(ax_boven, regels, x=0.40, y=0.15, vaste_breedte=True, fontsize=9)
+    for (row, col), cell in tabel.get_celld().items():
+        cell.set_edgecolor(KLEUREN["blokrand"])
+        if row == 0:
+            cell.set_facecolor(KLEUREN["kaart"])
+            cell.set_text_props(color=KLEUREN["snelheid"], fontweight="bold")
+        else:
+            cell.set_facecolor(KLEUREN["blok"])
+            cell.set_text_props(color=KLEUREN["tekst"])
+
+    # --- 2. RECHTS BOVEN: Donut Chart ---
+    if df_zones is not None and not df_zones.empty:
+        zone_betekenis = {
+            "Z1 Herstel": "Z1 Herstel",
+            "Z2 Duur": "Z2 Duur",
+            "Z3 Tempo": "Z3 Tempo",
+            "Z4 Drempel": "Z4 Drempel",
+            "Z5 Maximaal": "Z5 Maximaal"
+        }
+        
+        # Monochroom Cyaan verloop (van licht cyaan naar diep nachtblauw)
+        verloop_kleuren = [
+            "#80FAFF",  # Z1: Zeer licht cyaan
+            "#00F5FF",  # Z2: Signature IJscyaan
+            "#00B8D4",  # Z3: Midden cyaan
+            "#007791",  # Z4: Donker cyaan
+            "#004052",  # Z5: Diep nachtblauw
+        ]
+        
+        actieve_zones = df_zones[df_zones["percentage"] > 0.1].copy()
+        percentages = actieve_zones["percentage"].tolist()
+        kleuren_subset = [verloop_kleuren[i % len(verloop_kleuren)] for i in actieve_zones.index]
+        
+        # 1. Teken de ring (zonder standaard teksten)
+        wedges, _ = ax_donut.pie(
+            percentages, 
+            startangle=90,
+            colors=kleuren_subset,
+            wedgeprops=dict(width=0.38, edgecolor=KLEUREN["achtergrond"], linewidth=2)
+        )
+
+        # 2. Bepaal per segment de hoek en plaats schuin 'Z1', 'Z2', etc. IN de ring
+        for i, wedge in enumerate(wedges):
+            pct = percentages[i]
+            if pct < 1.5:  # Sla hele kleine segmentjes over om overlapping te voorkomen
+                continue
+                
+            # Middenhoek van het segment (in graden)
+            theta = (wedge.theta1 + wedge.theta2) / 2.0
+            
+            # Straal (r = 0.81 valt exact in de gekleurde ring van width=0.38)
+            r = 0.81 
+            x = r * np.cos(np.deg2rad(theta))
+            y = r * np.sin(np.deg2rad(theta))
+            
+            # Bepaal rotatiehoek zodat de tekst schuin meedraait met de cirkel
+            rotation = theta - 90 if theta <= 180 else theta + 90
+            
+            # Kort label (bijv. "Z1", "Z2")
+            zone_code = actieve_zones.iloc[i]["zone"].split(" ")[0]
+            
+            # Plaats de tekst schuin in de ring
+            ax_donut.text(
+                x, y, zone_code,
+                ha="center", va="center",
+                rotation=rotation,
+                rotation_mode="anchor",
+                color="#000000" if i < 2 else "#FFFFFF",  # Donkere tekst op licht cyaan, witte op donker
+                fontweight="bold",
+                fontsize=8
+            )
+
+        # 3. Legenda-labels opbouwen met zone-naam + exact percentage voor RECHTS
+        legenda_labels = [
+            f"{zone_betekenis.get(row['zone'], row['zone'])} ({row['percentage']:.0f}%)"
+            for _, row in actieve_zones.iterrows()
+        ]
+
+        # 4. Legenda strak aan de RECHTERKANT van de Donut Chart plaatsen
+        ax_donut.legend(
+            wedges, 
+            legenda_labels,
+            loc="center left",
+            bbox_to_anchor=(0.90, 0.5), 
+            frameon=False,
+            fontsize=8,
+            labelcolor="white"
+        )
+        
+        # Titel expliciet BOVEN de Donut Chart
+        ax_donut.set_title("HARTSLAGZONES", color=KLEUREN["tekst"], fontweight="bold", fontsize=10, pad=10)
+    else:
+        ax_donut.axis("off")
+
+    # --- 3. ONDERSTE DEEL: Hoogtemeters Staafgrafiek ---
+    etappes = df_master["etappe"].to_numpy()
+    x_indices = np.arange(len(etappes))
+    breedte = 0.38
+
+    ax_bars.bar(
+        x_indices - breedte/2,
+        df_master["stijging_m"],
+        width=breedte,
+        color=KLEUREN["snelheid"],  
+        label="Stijging (m)",
+        alpha=0.90
+    )
+    ax_bars.bar(
+        x_indices + breedte/2,
+        df_master["daling_m"],
+        width=breedte,
+        color=KLEUREN["hartslag"], 
+        label="Daling (m)",
+        alpha=0.90
+    )
     
-    ax_boven.set_title(maak_titel("Final Descent Decay: Spierschade vs. Wandelmechanica", etappe_nr), 
-                       fontsize=12, fontweight="bold", pad=15, color=KLEUREN["tekst"])
-    ax_boven.legend(loc="lower left", bbox_to_anchor=(0.02, 0.05), **_LEGENDA)
+    ax_bars.set_ylabel("Hoogtemeters (m)", color=KLEUREN["tekst"], fontweight="bold", fontsize=10)
+    ax_bars.set_xlabel("Etappe", color=KLEUREN["tekst"], fontweight="bold", fontsize=10)
+    ax_bars.set_xticks(x_indices)
+    ax_bars.set_xticklabels([f"E{e}" for e in etappes])
+    ax_bars.set_xlim(-0.6, len(etappes) - 0.4)
+    ax_bars.legend(loc="upper right", **_LEGENDA)
+    ax_bars.grid(True, linestyle=":", alpha=0.15)
     
+    fig.suptitle(titel, fontsize=13, fontweight="bold", y=0.98, color=KLEUREN["tekst"])
+    return fig
+
+def teken_master_slide2_vermoeidheid_pacing(
+    df_master: pd.DataFrame,
+    titel: str = "KLIM EFFICIENCY VS. CARDIAC DRIFT"
+) -> plt.Figure:
+    """Slide 2: Pacing & Klimvermoeidheid (Efficiency Index vs. Cardiac Drift per etappe)."""
+    pas_stijl_toe()
+    fig, ax1 = plt.subplots(figsize=(10.8, 10.8), dpi=300)
+    
+    etappes = df_master["etappe"].to_numpy()
+    x_indices = np.arange(len(etappes))
+    
+    ei_values = df_master["efficiency_index"].copy()
+    if "stijging_m" in df_master.columns:
+        ei_values[df_master["stijging_m"] < 300] = np.nan
+
+    ax1.plot(
+        x_indices,
+        ei_values,
+        color=KLEUREN["cadans"],
+        marker="o",
+        linewidth=3.0,
+        markersize=8,
+        label="Efficiency Index (m/u klim per bpm)",
+        zorder=4
+    )
+    ax1.set_ylabel("Klim Efficiency Index (VAM/HR)", color=KLEUREN["cadans"], fontweight="bold", fontsize=11)
+    ax1.tick_params(axis="y", labelcolor=KLEUREN["cadans"])
+    
+    ax2 = ax1.twinx()
+    ax2.axhline(0, color=KLEUREN["gedempt"], linestyle="--", linewidth=1.0, alpha=0.5)
+    
+    if "cardiac_drift_pct" in df_master.columns and df_master["cardiac_drift_pct"].notna().any():
+        ax2.plot(
+            x_indices,
+            df_master["cardiac_drift_pct"],
+            color=KLEUREN["hartslag"],
+            marker="s",
+            linestyle="--",
+            linewidth=2.2,
+            markersize=7,
+            label="Cardiac Drift (%)",
+            zorder=3
+        )
+        ax2.set_ylabel("Cardiac Drift (%)", color=KLEUREN["hartslag"], fontweight="bold", fontsize=11)
+        ax2.tick_params(axis="y", labelcolor=KLEUREN["hartslag"])
+        
+        valid_drift = df_master["cardiac_drift_pct"].dropna()
+        if not valid_drift.empty:
+            max_drift_idx = valid_drift.idxmax()
+            max_drift_val = valid_drift.loc[max_drift_idx]
+            eff_val = ei_values.iloc[max_drift_idx]
+
+    ax1.set_xlabel("Etappe", fontweight="bold", color=KLEUREN["tekst"], fontsize=11)
+    ax1.set_xticks(x_indices)
+    ax1.set_xticklabels([f"E{e}" for e in etappes])
+    ax1.grid(True, linestyle=":", alpha=0.15)
+    
+    fig.suptitle(titel, fontsize=13, fontweight="bold", y=0.98, color=KLEUREN["tekst"])
+    fig.tight_layout()
+    return fig
+
+
+def teken_master_slide3_gezondheid_hrv(
+    df_master: pd.DataFrame,
+    titel: str = "HRV VS. KLIMCADANS"
+) -> plt.Figure:
+    """Slide 3: Impact van vermoeidheid op gezondheid & autonoom herstel (HRV vs. Klimcadans)."""
+    pas_stijl_toe()
+    fig, ax1 = plt.subplots(figsize=(10.8, 10.8), dpi=300)
+    
+    etappes = df_master["etappe"].to_numpy()
+    x_indices = np.arange(len(etappes))
+    
+    if "hrv_rmssd" in df_master.columns and df_master["hrv_rmssd"].notna().any():
+        ax1.plot(x_indices, df_master["hrv_rmssd"], color=KLEUREN["hartslag"], marker="o", linewidth=3.0, markersize=8, label="HRV RMSSD (ms)", zorder=4)
+        ax1.set_ylabel("HRV (RMSSD in ms)", color=KLEUREN["hartslag"], fontweight="bold", fontsize=11)
+        ax1.tick_params(axis="y", labelcolor=KLEUREN["hartslag"])
+        
+        hrv_valid = df_master["hrv_rmssd"].dropna()
+        if len(hrv_valid) >= 2:
+            hrv_start = hrv_valid.iloc[0]
+            hrv_eind = hrv_valid.iloc[-1]
+
+    # Klimcadans uitsluitend op klim-etappes
+    if "klim_cadans" in df_master.columns and df_master["klim_cadans"].notna().any():
+        cadans_values = df_master["klim_cadans"].copy()
+        if "stijging_m" in df_master.columns:
+            cadans_values[df_master["stijging_m"] < 300] = np.nan
+
+        ax2 = ax1.twinx()
+        ax2.plot(x_indices, cadans_values, color=KLEUREN["cadans"], marker="s", linestyle="--", linewidth=2.2, markersize=7, label="Klimcadans (spm)", zorder=3)
+        ax2.set_ylabel("Klimcadans (spm)", color=KLEUREN["cadans"], fontweight="bold", fontsize=11)
+        ax2.tick_params(axis="y", labelcolor=KLEUREN["cadans"])
+
+    ax1.set_xlabel("Etappe", fontweight="bold", color=KLEUREN["tekst"], fontsize=11)
+    ax1.set_xticks(x_indices)
+    ax1.set_xticklabels([f"E{e}" for e in etappes])
+    ax1.grid(True, linestyle=":", alpha=0.15)
+    
+    fig.suptitle(titel, fontsize=13, fontweight="bold", y=0.98, color=KLEUREN["tekst"])
+    fig.tight_layout()
+    return fig
+
+def teken_master_slide4_brandstof_glycogeen(
+    df_master: pd.DataFrame,
+    titel: str = "ENERGIE & GLYCOGEENVERBRUIK"
+) -> plt.Figure:
+    """
+    Slide 4: Visualiseert het brandstofverbruik & glycogeen-uitputtingsmodel per etappe.
+    Verwacht dat 'energie_kcal' en 'glycogeen_verbruik_g' al berekend zijn in df_master.
+    """
+    pas_stijl_toe()
+    
+    # Check of de benodigde kolommen aanwezig zijn
+    if "energie_kcal" not in df_master.columns or "glycogeen_verbruik_g" not in df_master.columns:
+        raise KeyError(
+            "De kolommen 'energie_kcal' en/of 'glycogeen_verbruik_g' ontbreken in df_master. "
+            "Voer eerst 'bereken_energie_en_glycogeen(df_master)' uit in utils.berekeningen."
+        )
+        
+    fig, ax1 = plt.subplots(figsize=(10.8, 10.8), dpi=300)
+    
+    etappes = df_master["etappe"].to_numpy()
+    x_indices = np.arange(len(etappes))
+    breedte = 0.4
+
+    # Calorieën als staven
+    ax1.bar(
+        x_indices, 
+        df_master["energie_kcal"], 
+        width=breedte, 
+        color=KLEUREN["hartslag"], 
+        alpha=0.75, 
+        label="Energieverbruik (kcal)"
+    )
+    ax1.set_ylabel("Totaal Energieverbruik (kcal)", color=KLEUREN["hartslag"], fontweight="bold", fontsize=11)
+    ax1.tick_params(axis="y", labelcolor=KLEUREN["hartslag"])
+    
+    # Glycogeenverbruik op 2e Y-as
+    ax2 = ax1.twinx()
+    ax2.plot(
+        x_indices, 
+        df_master["glycogeen_verbruik_g"], 
+        color=KLEUREN["snelheid"], 
+        marker="s", 
+        linestyle="--",
+        linewidth=2.2, 
+        markersize=7, 
+        label="Glycogeenverbruik (g carbs)"
+    )
+    ax2.set_ylabel("Geschat Glycogeenverbruik (gram carbs)", color=KLEUREN["snelheid"], fontweight="bold", fontsize=11)
+    ax2.tick_params(axis="y", labelcolor=KLEUREN["snelheid"])
+    
+    # Samenvattende annotatie-box op basis van al aanwezige data
+    tot_kcal = df_master["energie_kcal"].sum()
+    tot_carbs_kg = df_master["glycogeen_verbruik_g"].sum() / 1000.0
+    tot_kcal_str = f"{tot_kcal:,.0f}".replace(",", ".")
+    tot_carbs_kg_str = f"{tot_carbs_kg:.2f}".replace(".", ",")
+
+    ax1.annotate(
+        f"Totale kcal: {tot_kcal_str}\nGlycogeen verbrand: {tot_carbs_kg_str} kg",
+        xy=(0.03, 0.92),
+        xycoords="axes fraction",
+        fontsize=9.5, color=KLEUREN["tekst"], fontweight="bold",
+        bbox=dict(boxstyle="round,pad=0.5", facecolor=KLEUREN["blok"], alpha=0.9, edgecolor=KLEUREN["blokrand"])
+    )
+
+    ax1.set_xlabel("Etappe", fontweight="bold", color=KLEUREN["tekst"], fontsize=11)
+    ax1.set_xticks(x_indices)
+    ax1.set_xticklabels([f"E{e}" for e in etappes])
+    ax1.grid(True, linestyle=":", alpha=0.15)
+    
+    fig.suptitle(titel, fontsize=13, fontweight="bold", y=0.98, color=KLEUREN["tekst"])
     fig.tight_layout()
     return fig
