@@ -1,0 +1,131 @@
+"""Centrale instellingen voor alle analyses.
+
+Alle drempelwaarden, paden en kleuren staan hier, zodat de berekeningen en
+grafieken herbruikbaar blijven en een aanpassing op één plek volstaat.
+"""
+from dataclasses import dataclass
+from pathlib import Path
+
+PROJECTMAP = Path(__file__).resolve().parents[1]
+
+@dataclass(frozen=True)
+class AtleetConfig:  
+    gewicht_kg: float = 53.0       
+    leeftijd: int = 31             
+    ftp: int = 178                 
+    max_hartslag: int = 189     
+    LTHR_HARDLOPEN = 165           
+    LTHR_FIETSEN = 165            
+    CSS_ZWEMMEN = 0.77             
+
+    @property
+    def hr_zones(self) -> dict[str, tuple[float, float]]:
+        m = self.max_hartslag
+        return {
+            "Z1 Herstel": (0, 0.60 * m),            
+            "Z2 Duur": (0.60 * m, 0.70 * m),        
+            "Z3 Tempo": (0.70 * m, 0.80 * m),       
+            "Z4 Drempel": (0.80 * m, 0.90 * m),    
+            "Z5 Maximaal": (0.90 * m, 220.0),      
+        }
+
+@dataclass(frozen=True)
+class PadConfig:
+    fit_map: Path = PROJECTMAP / "fit_bestanden"   
+    data_map: Path = PROJECTMAP / "data"           
+    uitvoer_map: Path = PROJECTMAP / "output"   
+
+
+@dataclass(frozen=True)
+class AnalyseConfig:
+    # --- Algemeen ---
+    max_gat_s: int = 15                  # Tijdgat (s) waarboven twee metingen niet als aaneengesloten gelden
+    wandel_cadans_factor: float = 2.0    # Garmin registreert bij lopen/wandelen de cadans per been; x2 = stappen per minuut
+    helling_min_pct: float = -30.0       # Hellingen daaronder worden als meetruis afgekapt
+    helling_max_pct: float = 45.0        # Hellingen daarboven worden als meetruis afgekapt
+    actieve_tijd_max_gat_s: int = 5      # Tijdsprongen groter dan dit tellen niet mee als actieve tijd
+
+    # --- Triatlonfasen (run-bike-run) ---
+    fiets_snelheid_kmh: float = 20.0     # Boven deze snelheid is het fietsen
+    wissel_snelheid_kmh: float = 3.0     # Onder deze snelheid staat de atleet stil in de wisselzone
+    t2_zoekvenster_min: float = 5.0      # Zoekvenster (min) na de fiets voor de tweede wissel
+    run2_snelheid_kmh: float = 7.5       # Boven deze snelheid is de tweede run begonnen
+    wisselduur_reserve_min: float = 2.0  # Aangenomen wisselduur (min) als de wissel niet te detecteren is
+
+    # --- Vergelijking run 1 en run 2 ---
+    run_snelheid_min_kmh: float = 8.0
+    run_snelheid_max_kmh: float = 15.0
+    run_hartslag_min: float = 140.0      # Lagere hartslagen horen bij opwarmen of uitlopen
+    run_glad_venster: int = 20           # Aantal metingen voor het voortschrijdend gemiddelde
+    run_glad_min_metingen: int = 5
+
+    # --- Klim-intensiteit (VAM) ---
+    vam_venster_s: int = 300             # Tijdvenster voor de VAM-berekening
+    vam_max: float = 3000.0              # Hogere waarden zijn meetruis
+    vam_min_helling_pct: float = 1.0     # Alleen klimmen vanaf deze helling tonen
+    hoogte_glad_venster: int = 15        # Aantal metingen voor het gladstrijken van de hoogte
+
+    # --- Helling versus cadans ---
+    klim_min_helling_pct: float = 1.0
+    cadans_min_spm: float = 40.0        
+    cadans_max_spm: float = 220.0
+
+    # --- Herstelhartslag ---
+    hrr_stilstand_kmh: float = 1.62      # Onder deze snelheid (0,45 m/s) staat de atleet stil
+    hrr_min_pauze_s: int = 180           # Minimale pauzeduur
+    hrr_min_daling_bpm: float = 5.0      # Kleinere herstelwaarden worden niet getoond
+    hrr_venster_s: int = 60              # Herstel wordt gemeten over de eerste 60s van de pauze
+    hrr_hartslag_glad: int = 60          # Aantal metingen voor het gladstrijken van de hartslag
+    hrr_max_bevroren: int = 30           # Meer dan zoveel identieke hartslagen op rij = sensorstoring
+
+    # --- Pauzes, beweegratio en cardiac drift ---
+    pauze_snelheid_kmh: float = 0.5      # Onder deze snelheid staat de atleet stil
+    pauze_min_duur_s: int = 150          # Alleen aaneengesloten stilstand vanaf deze duur is een rustpauze
+    savgol_venster_s: int = 301         
+    savgol_polyorder: int = 2
+    hoogtecorrectie_factor: float = 10.0  
+
+    # --- 2D- versus 3D-afstand ---
+    gps_max_stap_m: float = 200.0        # Grotere sprongen tussen twee metingen zijn GPS-storingen
+    hoogte_3d_glad_venster: int = 5      # Hoogte gladstrijken voordat de 3D-afstand wordt berekend
+
+    # --- Cadanstrend per terreintype ---
+    terrein_grens_pct: float = 5.0       
+    terrein_rooster_m: float = 10.0      
+    cadanstrend_venster: int = 75
+    cadanstrend_polyorder: int = 3
+    baseline_klim_helling_pct: float = 5.0
+
+    # --- Hartslag per hellingsklasse ---
+    klasse_min_pct: int = -35
+    klasse_max_pct: int = 40
+    klasse_breedte_pct: int = 5
+    klasse_min_aantal: int = 10          
+
+# Standaardinstanties die in de notebooks worden gebruikt
+ATLEET = AtleetConfig()
+PADEN = PadConfig()
+ANALYSE = AnalyseConfig()
+
+# Uniform kleurenpalet voor alle grafieken
+KLEUREN = {
+    "tekst": "#FFE5EE",         # Zeer licht pastelroze
+    "cadans": "#FFB2CB",        # Zacht suikerspinroze
+    "zwemmen": "#FF80A8",       # Licht koraalroze
+    "snelheid": "#FF4D85",      # Helder roze
+    "hardlopen": "#FF2A6D",     # Roze
+    "hartslag": "#F5004E",      # Diep frambozenrood
+    "fietsen": "#C2003D",       # Donker karmozijnrood
+    "hoogte": "#8F002D",        # Bordeaurood
+    "blokrand": "#5C001D",      # Zeer donker wijnrood
+    "blok": "#330010",          # Bijna zwart met een rode ondertoon
+    "achtergrond": "#000000",   # Zwart  
+}
+
+# Afmetingen per exportformaat
+EXPORTFORMATEN = {
+    "staand": (10.8, 13.5),      # 4:5 (Instagram-post)
+    "vierkant": (10.8, 10.8),    # 1:1
+    "verhaal": (10.8, 19.2),     # 9:16 (story/reel)
+    "liggend": (13.5, 7.59),     # 16:9 (breedbeeld)
+}

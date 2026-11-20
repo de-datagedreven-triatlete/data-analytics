@@ -48,9 +48,9 @@ def teken_race_opbouw(
         ax_hartslag.axvline(fases[-1]["eind"], color="#333745", linestyle=":", linewidth=1.0)
         
     if heeft_hartslag:
-        ax_hartslag.plot(df["verstreken_minuten"], df["hartslag"], color=KLEUREN["hartslag"], linewidth=1.8, alpha=0.95)
-        ax_hartslag.set_ylabel("Hartslag (bpm)", color=KLEUREN["hartslag"], fontweight="bold", fontsize=11)
-        ax_hartslag.tick_params(axis="y", labelcolor=KLEUREN["hartslag"])
+        ax_hartslag.plot(df["verstreken_minuten"], df["hartslag"], color=KLEUREN["hardlopen"], linewidth=1.8, alpha=0.95)
+        ax_hartslag.set_ylabel("Hartslag (bpm)", color=KLEUREN["hardlopen"], fontweight="bold", fontsize=11)
+        ax_hartslag.tick_params(axis="y", labelcolor=KLEUREN["hardlopen"])
         ax_hartslag.set_ylim(min_hr - 8, max_hr + 16)
 
     ax_snelheid = ax_hartslag.twinx()
@@ -77,7 +77,7 @@ def teken_run_vergelijking(
     """Vergelijkt hartslag bij gelijke snelheid in run 1 (fris) en run 2 (vermoeid)."""
     pas_stijl_toe()
     fig, ax = plt.subplots(figsize=(9, 7), dpi=300)
-    kleur1, kleur2 = KLEUREN["hartslag"], KLEUREN["snelheid"]
+    kleur1, kleur2 = KLEUREN["hardlopen"], KLEUREN["snelheid"]
     
     ax.scatter(run1["snelheid_kmh"], run1["hartslag"], color=kleur1, alpha=0.25, label="Run 1 (fris)", s=25)
     ax.scatter(run2["snelheid_kmh"], run2["hartslag"], color=kleur2, alpha=0.25, label="Run 2 (vermoeid)", s=25)
@@ -91,7 +91,7 @@ def teken_run_vergelijking(
     ax.set_xlabel("Snelheid (km/u)", fontsize=12, fontweight="bold", labelpad=10, color=KLEUREN["gedempt"])
     ax.set_ylabel("Hartslag (bpm)", fontsize=12, fontweight="bold", labelpad=10, color=KLEUREN["gedempt"])
     ax.set_title(titel, fontsize=15, fontweight="bold", pad=20, color=KLEUREN["tekst"])
-    ax.legend(frameon=True, facecolor=KLEUREN["kaart"], edgecolor="none", fontsize=10, loc="upper left")
+    ax.legend(frameon=True, facecolor=KLEUREN["blok"], edgecolor="none", fontsize=10, loc="upper left")
     fig.tight_layout()
     return fig
 
@@ -126,9 +126,9 @@ def teken_vam_dashboard(
         ax_hartslag = ax_vam.twinx()
         ax_hartslag.spines["right"].set_position(("outward", 10))
         hartslag_glad = df["hartslag"].rolling(window=60, min_periods=1).mean()
-        ax_hartslag.plot(x, hartslag_glad, color=KLEUREN["hartslag"], linewidth=1.8, label="Hartslag (bpm)", zorder=4)
-        ax_hartslag.set_ylabel("Hartslag (bpm)", color=KLEUREN["hartslag"], fontweight="bold")
-        ax_hartslag.tick_params(axis="y", labelcolor=KLEUREN["hartslag"])
+        ax_hartslag.plot(x, hartslag_glad, color=KLEUREN["hardlopen"], linewidth=1.8, label="Hartslag (bpm)", zorder=4)
+        ax_hartslag.set_ylabel("Hartslag (bpm)", color=KLEUREN["hardlopen"], fontweight="bold")
+        ax_hartslag.tick_params(axis="y", labelcolor=KLEUREN["hardlopen"])
         ax_hartslag.set_ylim(int(hartslag_glad.min() - 15), int(hartslag_glad.max() + 15))
         gem_hartslag_tekst = f"{int(df['hartslag'].mean())} bpm"
         
@@ -164,9 +164,9 @@ def teken_cardiac_drift(actief: pd.DataFrame, resultaat: dict, etappe_nr: int | 
     ax_snelheid.set_ylim(0, max(actief["snelheid_glad_kmh"].max() * 1.15, 5))
     ax_snelheid.grid(False)
     
-    ax_hartslag.plot(x, actief["hartslag_glad"], color=KLEUREN["hartslag"], linewidth=1.8)
-    ax_hartslag.set_ylabel("Hartslag (bpm)", color=KLEUREN["hartslag"], fontsize=11, fontweight="bold", labelpad=8)
-    ax_hartslag.tick_params(axis="y", colors=KLEUREN["hartslag"])
+    ax_hartslag.plot(x, actief["hartslag_glad"], color=KLEUREN["hardlopen"], linewidth=1.8)
+    ax_hartslag.set_ylabel("Hartslag (bpm)", color=KLEUREN["hardlopen"], fontsize=11, fontweight="bold", labelpad=8)
+    ax_hartslag.tick_params(axis="y", colors=KLEUREN["hardlopen"])
     ax_hartslag.set_ylim(actief["hartslag_glad"].min() * 0.85, actief["hartslag_glad"].max() * 1.10)
     ax_hartslag.grid(False)
     
@@ -179,7 +179,7 @@ def teken_cardiac_drift(actief: pd.DataFrame, resultaat: dict, etappe_nr: int | 
         f"Gecorrigeerde drift:    {drift:+.1f}%",
     ], y=0.95, vaste_breedte=True, fontsize=9.5)
     
-    drift_kleur = KLEUREN["hartslag"] if drift > 5.0 else KLEUREN["waarschuwing"] if drift > 0 else KLEUREN["snelheid"]
+    drift_kleur = KLEUREN["hardlopen"] if drift > 5.0 else KLEUREN["cadans"] if drift > 0 else KLEUREN["snelheid"]
     ef = [resultaat["ef_helft1"], resultaat["ef_helft2"]]
     staven = ax_ef.bar(["Helft 1", "Helft 2"], ef, color=[KLEUREN["snelheid"], drift_kleur], width=0.55)
     for staaf, waarde in zip(staven, ef):
@@ -246,7 +246,7 @@ def teken_master_slide1_overzicht(
     for (row, col), cell in tabel.get_celld().items():
         cell.set_edgecolor(KLEUREN["blokrand"])
         if row == 0:
-            cell.set_facecolor(KLEUREN["kaart"])
+            cell.set_facecolor(KLEUREN["blok"])
             cell.set_text_props(color=KLEUREN["snelheid"], fontweight="bold")
         else:
             cell.set_facecolor(KLEUREN["blok"])
@@ -353,7 +353,7 @@ def teken_master_slide1_overzicht(
         x_indices + breedte/2,
         df_master["daling_m"],
         width=breedte,
-        color=KLEUREN["hartslag"], 
+        color=KLEUREN["hardlopen"], 
         label="Daling (m)",
         alpha=0.90
     )
@@ -404,7 +404,7 @@ def teken_master_slide2_vermoeidheid_pacing(
         ax2.plot(
             x_indices,
             df_master["cardiac_drift_pct"],
-            color=KLEUREN["hartslag"],
+            color=KLEUREN["hardlopen"],
             marker="s",
             linestyle="--",
             linewidth=2.2,
@@ -412,8 +412,8 @@ def teken_master_slide2_vermoeidheid_pacing(
             label="Cardiac Drift (%)",
             zorder=3
         )
-        ax2.set_ylabel("Cardiac Drift (%)", color=KLEUREN["hartslag"], fontweight="bold", fontsize=11)
-        ax2.tick_params(axis="y", labelcolor=KLEUREN["hartslag"])
+        ax2.set_ylabel("Cardiac Drift (%)", color=KLEUREN["hardlopen"], fontweight="bold", fontsize=11)
+        ax2.tick_params(axis="y", labelcolor=KLEUREN["hardlopen"])
         
         valid_drift = df_master["cardiac_drift_pct"].dropna()
         if not valid_drift.empty:
@@ -443,9 +443,9 @@ def teken_master_slide3_gezondheid_hrv(
     x_indices = np.arange(len(etappes))
     
     if "hrv_rmssd" in df_master.columns and df_master["hrv_rmssd"].notna().any():
-        ax1.plot(x_indices, df_master["hrv_rmssd"], color=KLEUREN["hartslag"], marker="o", linewidth=3.0, markersize=8, label="HRV RMSSD (ms)", zorder=4)
-        ax1.set_ylabel("HRV (RMSSD in ms)", color=KLEUREN["hartslag"], fontweight="bold", fontsize=11)
-        ax1.tick_params(axis="y", labelcolor=KLEUREN["hartslag"])
+        ax1.plot(x_indices, df_master["hrv_rmssd"], color=KLEUREN["hardlopen"], marker="o", linewidth=3.0, markersize=8, label="HRV RMSSD (ms)", zorder=4)
+        ax1.set_ylabel("HRV (RMSSD in ms)", color=KLEUREN["hardlopen"], fontweight="bold", fontsize=11)
+        ax1.tick_params(axis="y", labelcolor=KLEUREN["hardlopen"])
         
         hrv_valid = df_master["hrv_rmssd"].dropna()
         if len(hrv_valid) >= 2:
@@ -500,12 +500,12 @@ def teken_master_slide4_brandstof_glycogeen(
         x_indices, 
         df_master["energie_kcal"], 
         width=breedte, 
-        color=KLEUREN["hartslag"], 
+        color=KLEUREN["hardlopen"], 
         alpha=0.75, 
         label="Energieverbruik (kcal)"
     )
-    ax1.set_ylabel("Totaal Energieverbruik (kcal)", color=KLEUREN["hartslag"], fontweight="bold", fontsize=11)
-    ax1.tick_params(axis="y", labelcolor=KLEUREN["hartslag"])
+    ax1.set_ylabel("Totaal Energieverbruik (kcal)", color=KLEUREN["hardlopen"], fontweight="bold", fontsize=11)
+    ax1.tick_params(axis="y", labelcolor=KLEUREN["hardlopen"])
     
     # Glycogeenverbruik op 2e Y-as
     ax2 = ax1.twinx()
@@ -543,4 +543,179 @@ def teken_master_slide4_brandstof_glycogeen(
     
     fig.suptitle(titel, fontsize=13, fontweight="bold", y=0.98, color=KLEUREN["tekst"])
     fig.tight_layout()
+    return fig
+
+def teken_yoy_hartslag(
+    df_moving: pd.DataFrame,
+    label_2025: str,
+    label_2026: str,
+    titel: str = "HARTSLAGANALYSE: VERGELIJKING"
+) -> plt.Figure:
+    """
+    Tekent de twee hartslaggrafieken naast elkaar:
+    - Links: Tijd & percentage in hartslagzones per jaar
+    - Rechts: Gemiddeld hartslagverval per 25 km
+    - Bovenin: Eén centrale legenda voor de jaargangen
+    """
+    pas_stijl_toe()
+    fig, (ax_zones, ax_verval) = plt.subplots(1, 2, figsize=(14, 6.5), dpi=300)
+    
+    kleuren_jaar = {label_2025: KLEUREN["snelheid"], label_2026: KLEUREN["hardlopen"]}
+    
+    # --- 1. Tijd in Hartslagzones ---
+    zone_counts = (
+        df_moving.groupby(["jaar", "hr_zone"], observed=False)["time_diff"].sum() / 60
+    ).reset_index(name="minuten")
+    
+    zones = df_moving["hr_zone"].cat.categories.tolist()
+    x_indices = np.arange(len(zones))
+    breedte = 0.38
+    
+    z_2025 = zone_counts[zone_counts["jaar"] == label_2025]["minuten"].to_numpy()
+    z_2026 = zone_counts[zone_counts["jaar"] == label_2026]["minuten"].to_numpy()
+    
+    tot_2025 = z_2025.sum()
+    tot_2026 = z_2026.sum()
+    
+    rects1 = ax_zones.bar(x_indices - breedte / 2, z_2025, width=breedte, color=kleuren_jaar[label_2025], label=label_2025, alpha=0.9)
+    rects2 = ax_zones.bar(x_indices + breedte / 2, z_2026, width=breedte, color=kleuren_jaar[label_2026], label=label_2026, alpha=0.9)
+    
+    # Percentages boven de staven plaatsen
+    for rect, tot in zip(rects1, [tot_2025] * len(z_2025)):
+        h = rect.get_height()
+        pct = (h / tot) * 100 if tot > 0 else 0
+        if pct >= 1.0:
+            ax_zones.text(rect.get_x() + rect.get_width() / 2, h + 3, f"{pct:.0f}%",
+                          ha="center", va="bottom", color=KLEUREN["tekst"], fontsize=8, fontweight="bold")
+            
+    for rect, tot in zip(rects2, [tot_2026] * len(z_2026)):
+        h = rect.get_height()
+        pct = (h / tot) * 100 if tot > 0 else 0
+        if pct >= 1.0:
+            ax_zones.text(rect.get_x() + rect.get_width() / 2, h + 3, f"{pct:.0f}%",
+                          ha="center", va="bottom", color=KLEUREN["tekst"], fontsize=8, fontweight="bold")
+    
+    ax_zones.set_title("TIJD IN HARTSLAGZONES", color=KLEUREN["tekst"], fontweight="bold", fontsize=11, pad=12)
+    ax_zones.set_ylabel("Tijd (minuten)", color=KLEUREN["gedempt"], fontweight="bold", fontsize=10)
+    ax_zones.set_xticks(x_indices)
+    ax_zones.set_xticklabels(zones, rotation=20, ha="right", fontsize=9, color=KLEUREN["tekst"])
+    ax_zones.set_ylim(0, max(max(z_2025), max(z_2026)) * 1.15)
+    ax_zones.grid(True, linestyle=":", alpha=0.15)
+    
+    # --- 2. Hartslagverval per 25 km ---
+    hr_splits = df_moving.groupby(["kwadrant", "jaar"], observed=False)["heart_rate"].mean().reset_index()
+    
+    for jaar, marker, linestyle in [(label_2025, "o", "-"), (label_2026, "s", "-")]:
+        data_jaar = hr_splits[hr_splits["jaar"] == jaar]
+        ax_verval.plot(
+            data_jaar["kwadrant"],
+            data_jaar["heart_rate"],
+            color=kleuren_jaar[jaar],
+            marker=marker,
+            linestyle=linestyle,
+            linewidth=2.2,
+            markersize=7,
+            zorder=3
+        )
+        
+    ax_verval.set_title("HARTSLAGVERVAL PER 25 KM", color=KLEUREN["tekst"], fontweight="bold", fontsize=11, pad=12)
+    ax_verval.set_ylabel("Gem. Hartslag (bpm)", color=KLEUREN["gedempt"], fontweight="bold", fontsize=10)
+    ax_verval.set_xlabel("Afstand", color=KLEUREN["gedempt"], fontweight="bold", fontsize=10)
+    ax_verval.grid(True, linestyle=":", alpha=0.15)
+    
+    # --- Eén Centrale Legenda Bovenin ---
+    handles, labels = ax_zones.get_legend_handles_labels()
+    fig.legend(handles, labels, loc="upper center", bbox_to_anchor=(0.5, 0.94), ncol=2, frameon=False, fontsize=9.5, labelcolor="white")
+    
+    fig.suptitle(titel, fontsize=13, fontweight="bold", y=0.99, color=KLEUREN["tekst"])
+    fig.tight_layout(rect=[0, 0.03, 1, 0.91])
+    return fig
+
+
+def teken_yoy_snelheid_en_tijd(
+    df_all: pd.DataFrame,
+    df_moving: pd.DataFrame,
+    label_2025: str,
+    label_2026: str,
+    titel: str = "PACING & TOTALE TIJD: VERGELIJKING"
+) -> plt.Figure:
+    """
+    Tekent de twee pacing- en tijdsgrafieken naast elkaar:
+    - Links: Snelheidsverval per 25 km
+    - Rechts: Beweegtijd vs. Pauzetijd (met pauze %)
+    - Bovenin: Eén centrale legenda voor de jaargangen
+    """
+    pas_stijl_toe()
+    fig, (ax_snelheid, ax_tijd) = plt.subplots(1, 2, figsize=(14, 6.5), dpi=300)
+    
+    kleuren_jaar = {label_2025: KLEUREN["snelheid"], label_2026: KLEUREN["hardlopen"]}
+    
+    # --- 1. Snelheidsverval per 25 km ---
+    splits_dist = (
+        df_moving.groupby(["kwadrant", "jaar"], observed=False)["distance_km"].max()
+        - df_moving.groupby(["kwadrant", "jaar"], observed=False)["distance_km"].min()
+    )
+    splits_time = df_moving.groupby(["kwadrant", "jaar"], observed=False)["time_diff"].sum() / 3600
+    speed_splits = (splits_dist / splits_time).reset_index(name="speed_kmh")
+    
+    for jaar, marker, linestyle in [(label_2025, "o", "-"), (label_2026, "s", "-")]:
+        data_jaar = speed_splits[speed_splits["jaar"] == jaar]
+        ax_snelheid.plot(
+            data_jaar["kwadrant"],
+            data_jaar["speed_kmh"],
+            color=kleuren_jaar[jaar],
+            marker=marker,
+            linestyle=linestyle,
+            linewidth=2.2,
+            markersize=7,
+            label=jaar,
+            zorder=3
+        )
+        
+    ax_snelheid.set_title("SNELHEIDSVERVAL PER 25 KM", color=KLEUREN["tekst"], fontweight="bold", fontsize=11, pad=12)
+    ax_snelheid.set_ylabel("Snelheid (km/u)", color=KLEUREN["gedempt"], fontweight="bold", fontsize=10)
+    ax_snelheid.set_xlabel("Afstand", color=KLEUREN["gedempt"], fontweight="bold", fontsize=10)
+    ax_snelheid.grid(True, linestyle=":", alpha=0.15)
+    
+    # --- 2. Beweegtijd vs. Pauzetijd ---
+    time_stats = (
+        df_all.groupby(["jaar", "is_moving"], observed=False)["time_diff"].sum() / 60
+    ).reset_index(name="minuten")
+    
+    jaren = [label_2025, label_2026]
+    x_indices = np.arange(len(jaren))
+    breedte = 0.45
+    
+    bewegen_min = [time_stats[(time_stats["jaar"] == j) & (time_stats["is_moving"] == True)]["minuten"].sum() for j in jaren]
+    pauze_min = [time_stats[(time_stats["jaar"] == j) & (time_stats["is_moving"] == False)]["minuten"].sum() for j in jaren]
+    
+    ax_tijd.bar(x_indices, bewegen_min, width=breedte, color=KLEUREN["snelheid"], alpha=0.9)
+    ax_tijd.bar(x_indices, pauze_min, bottom=bewegen_min, width=breedte, color=KLEUREN["hardlopen"], alpha=0.9)
+    
+    # Annotaties bovenop de staven (totale tijd) en in het pauzeblok (pauze %)
+    for i, (b, p) in enumerate(zip(bewegen_min, pauze_min)):
+        tot = b + p
+        pct_pauze = (p / tot) * 100 if tot > 0 else 0
+        
+        # Totale duur boven staaf
+        ax_tijd.text(x_indices[i], tot + 7, f"{tot:.0f}min", ha="center", va="bottom", color=KLEUREN["tekst"], fontweight="bold", fontsize=9.5)
+        
+        # Pauze percentage gecentreerd in het roze pauzeblok
+        if p > 15:
+            ax_tijd.text(x_indices[i], b + (p / 2), f"Pauze: {pct_pauze:.0f}%", ha="center", va="center", color="white", fontweight="bold", fontsize=8.5)
+        
+    ax_tijd.set_title("TOTALE TIJD: BEWEGEN VS. PAUZES", color=KLEUREN["tekst"], fontweight="bold", fontsize=11, pad=12)
+    ax_tijd.set_ylabel("Tijd (minuten)", color=KLEUREN["gedempt"], fontweight="bold", fontsize=10)
+    korte_jaren = [j[:4] for j in jaren]
+    ax_tijd.set_xticks(x_indices)
+    ax_tijd.set_xticklabels(korte_jaren, fontsize=9.5, color=KLEUREN["tekst"])
+    ax_tijd.set_ylim(0, max(np.array(bewegen_min) + np.array(pauze_min)) * 1.15)
+    ax_tijd.grid(True, axis="y", linestyle=":", alpha=0.15)
+    
+    # --- Eén Centrale Legenda Bovenin ---
+    handles, labels = ax_snelheid.get_legend_handles_labels()
+    fig.legend(handles, labels, loc="upper center", bbox_to_anchor=(0.5, 0.94), ncol=2, frameon=False, fontsize=9.5, labelcolor="white")
+    
+    fig.suptitle(titel, fontsize=13, fontweight="bold", y=0.99, color=KLEUREN["tekst"])
+    fig.tight_layout(rect=[0, 0.03, 1, 0.91])
     return fig

@@ -1,6 +1,8 @@
 # Persoonlijke en gevoelige data: FIT-bestanden bevatten GPS-posities (o.a. start- en eindlocatie)
 fit_bestanden/*.fit
 fit_bestanden/*.FIT
+fit_bestanden_Garmin/*.fit
+fit_bestanden_Garmin/*.FIT
 *.fit
 
 # Python

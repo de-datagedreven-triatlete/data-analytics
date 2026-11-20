@@ -24,7 +24,7 @@ def pas_stijl_toe() -> None:
             "axes.facecolor": KLEUREN["achtergrond"],
             "axes.edgecolor": "#333333",
             "axes.linewidth": 0.8,
-            "grid.color": KLEUREN["raster"],
+            "grid.color": KLEUREN["blok"],
             "grid.linestyle": ":",
             "grid.alpha": 0.6,
             "xtick.labelsize": 9,
